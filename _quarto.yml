@@ -15,6 +15,7 @@ book:
   chapters:
     - index.qmd
     - 01-tasas-interes.qmd
+    - 02-ecuaciones-valor.qmd
   page-footer:
     left: "Julián Mauricio Fajardo"
     right:
