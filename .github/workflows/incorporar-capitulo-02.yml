@@ -1,0 +1,45 @@
+name: Incorporar capitulo 2 del manuscrito revisado
+on:
+  push:
+    paths:
+      - .github/workflows/incorporar-capitulo-02.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  integrar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar historial completo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Recuperar solamente el capitulo 2 del ZIP original
+        shell: bash
+        run: |
+          set -euo pipefail
+          archivo="libro-tidyactuarial-integrado-revisado.zip"
+          origen="$(git log --all --diff-filter=A --format=%H -- "$archivo" | head -n 1)"
+          test -n "$origen"
+          git show "$origen:$archivo" > /tmp/manuscrito-integrado.zip
+          python3 - <<'PY'
+          import zipfile
+          from pathlib import Path
+          with zipfile.ZipFile('/tmp/manuscrito-integrado.zip') as z:
+              source='libro-tidyactuarial/02-ecuaciones-valor.qmd'
+              chapter=z.read(source)
+          assert len(chapter)>50000, "El capitulo recuperado no parece completo"
+          assert b'Ecuaciones de valor' in chapter[:500]
+          Path('02-ecuaciones-valor.qmd').write_bytes(chapter)
+          print("Capitulo 2 restaurado:",len(chapter),"bytes")
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add 02-ecuaciones-valor.qmd
+          if ! git diff --cached --quiet; then
+            git commit -m "Incorporar el capitulo 2 revisado sin editar su contenido"
+            git push origin HEAD:main
+          fi
