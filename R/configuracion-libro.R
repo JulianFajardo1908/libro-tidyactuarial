@@ -1,76 +1,185 @@
-# Configuracion comun del libro (Quarto/R)
-# Esta fuente se carga desde cada capitulo y no se presenta al lector.
+# Configuración compartida del Volumen I
+# Matemática Actuarial con R y tidyactuarial
 
 suppressPackageStartupMessages({
   library(tidyactuarial)
-  library(tidyverse)
+  library(dplyr)
+  library(tidyr)
+  library(tibble)
+  library(purrr)
   library(knitr)
-  library(lubridate)
+  library(ggplot2)
+  library(scales)
 })
 
-if (utils::packageVersion("tidyactuarial") < "0.2.0") {
-  stop("Los ejemplos requieren tidyactuarial 0.2.0 o posterior.")
+if (utils::packageVersion("tidyactuarial") < "0.1.6") {
+  stop("Este libro requiere tidyactuarial 0.1.6 o posterior.")
 }
 
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
-  fig.align = "center",
+  message = FALSE,
+  warning = FALSE,
   fig.width = 6,
   fig.height = 3.5,
-  dpi = 300,
-  warning = FALSE,
-  message = FALSE
+  fig.align = "center",
+  out.width = "82%",
+  dpi = 300
 )
 
-# El parametro digits admite: un valor comun para toda la tabla;
-# un valor por fila (para comparar tasas y cuantias); o un valor por columna.
-# El redondeo se aplica solo al mostrar los datos, no a los calculos.
-formatear_tabla <- function(datos, digits = 2) {
-  if (!is.data.frame(datos)) {
-    stop("Se espera un data.frame o tibble.")
-  }
-  n <- nrow(datos)
-  p <- ncol(datos)
-  if (length(digits) == 1L) {
-    digitos <- matrix(as.integer(digits), nrow = n, ncol = p)
-  } else if (length(digits) == n) {
-    digitos <- matrix(rep(as.integer(digits), p), nrow = n, ncol = p)
-  } else if (length(digits) == p) {
-    digitos <- matrix(rep(as.integer(digits), each = n), nrow = n, ncol = p)
-  } else {
-    stop("digits debe tener longitud 1, nrow(datos) o ncol(datos).")
-  }
-  resultado <- as.data.frame(datos, check.names = FALSE)
-  for (j in seq_len(p)) {
-    if (is.numeric(resultado[[j]])) {
-      resultado[[j]] <- vapply(seq_len(n), function(i) {
-        x <- resultado[[j]][i]
-        if (is.na(x)) return(NA_character_)
-        formatC(
-          x,
-          digits = digitos[i, j],
-          format = "f",
-          big.mark = " ",
-          decimal.mark = "."
-        )
-      }, character(1))
-    }
-  }
-  resultado
-}
+options(
+  width = 90,
+  pillar.width = 90,
+  tibble.print_max = 12,
+  tibble.print_min = 8,
+  scipen = 999,
+  digits = 6,
+  libro_digits_numero = 6,
+  libro_digits_tabla = 6,
+  libro_digits_comparacion = 10,
+  libro_max_cols = Inf
+)
 
-tabla_resultado <- function(datos, titulo = NULL, digits = 2, align = NULL) {
-  vista <- formatear_tabla(datos, digits = digits)
-  knitr::kable(
-    vista,
-    format = "pipe",
-    caption = titulo,
-    align = align,
-    row.names = FALSE
+formatear_numero <- function(
+    x,
+    digits = getOption("libro_digits_numero", 6)) {
+  if (length(digits) == 1L) {
+    digits <- rep(digits, length(x))
+  }
+  
+  purrr::map2_chr(
+    x,
+    digits,
+    ~ if (is.na(.x)) {
+      NA_character_
+    } else {
+      formatC(
+        .x,
+        format = "f",
+        digits = .y,
+        big.mark = "",
+        decimal.mark = "."
+      )
+    }
   )
 }
 
-tabla_comparacion <- function(datos, titulo = NULL, digits = 2, align = NULL) {
-  tabla_resultado(datos, titulo = titulo, digits = digits, align = align)
+salida_kable <- function(tabla) {
+  knitr::asis_output(
+    paste0(
+      "\n\n",
+      paste(as.character(tabla), collapse = "\n"),
+      "\n\n"
+    )
+  )
+}
+
+tabla_resultado <- function(
+    datos,
+    titulo = NULL,
+    digits = getOption("libro_digits_tabla", 6),
+    align = NULL,
+    max_cols = getOption("libro_max_cols", Inf)) {
+  datos_base <- datos |>
+    tibble::as_tibble()
+  
+  if (is.finite(max_cols) && ncol(datos_base) > max_cols) {
+    datos_base <- datos_base |>
+      dplyr::select(seq_len(max_cols))
+  }
+  
+  if (!is.null(align)) {
+    align <- align[seq_len(min(length(align), ncol(datos_base)))]
+  }
+  
+  datos_formateados <- datos_base |>
+    dplyr::mutate(
+      dplyr::across(
+        .cols = where(is.numeric),
+        .fns = ~ formatC(
+          .x,
+          format = "f",
+          digits = digits,
+          big.mark = "",
+          decimal.mark = "."
+        )
+      )
+    )
+  
+  tabla <- datos_formateados |>
+    knitr::kable(
+      caption = titulo,
+      align = align
+    )
+  
+  salida_kable(tabla)
+}
+
+error_relativo <- function(analitico, computacional) {
+  error_abs <- abs(analitico - computacional)
+  
+  dplyr::if_else(
+    abs(analitico) > sqrt(.Machine$double.eps),
+    error_abs / abs(analitico),
+    NA_real_
+  )
+}
+
+# Admite tanto tres vectores como una tibble con columnas
+# magnitud, analitico y tidyactuarial.
+tabla_comparacion <- function(
+    magnitud,
+    analitico = NULL,
+    paquete = NULL,
+    digits = getOption("libro_digits_comparacion", 6),
+    titulo = "Auditoría manual vs. tidyactuarial") {
+  if (inherits(magnitud, "data.frame")) {
+    datos_entrada <- tibble::as_tibble(magnitud)
+    
+    columnas_requeridas <- c("magnitud", "analitico", "tidyactuarial")
+    faltantes <- setdiff(columnas_requeridas, names(datos_entrada))
+    
+    if (length(faltantes) > 0L) {
+      stop(
+        "La tabla de auditoría no contiene las columnas requeridas: ",
+        paste(faltantes, collapse = ", ")
+      )
+    }
+    
+    magnitud <- datos_entrada$magnitud
+    analitico <- datos_entrada$analitico
+    paquete <- datos_entrada$tidyactuarial
+  }
+  
+  if (is.null(analitico) || is.null(paquete)) {
+    stop("Deben suministrarse los resultados analítico y computacional.")
+  }
+  
+  analitico_num <- as.numeric(analitico)
+  paquete_num <- as.numeric(paquete)
+  diferencia <- abs(analitico_num - paquete_num)
+  
+  n_filas <- length(analitico_num)
+  
+  if (!(length(digits) %in% c(1L, n_filas))) {
+    stop(
+      "`digits` debe tener longitud 1 o una entrada por fila de la auditoría."
+    )
+  }
+  
+  datos <- tibble::tibble(
+    Magnitud = as.character(magnitud),
+    `Resultado analítico` = formatear_numero(analitico_num, digits),
+    `tidyactuarial` = formatear_numero(paquete_num, digits),
+    `Diferencia absoluta` = formatear_numero(diferencia, digits)
+  )
+  
+  tabla <- datos |>
+    knitr::kable(
+      caption = titulo,
+      align = c("l", "r", "r", "r")
+    )
+  
+  salida_kable(tabla)
 }
