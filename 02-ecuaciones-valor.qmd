@@ -1,0 +1,3899 @@
+---
+title: "Ecuaciones de valor"
+---
+
+```{r}
+#| label: setup-capitulo-02
+#| include: false
+
+source("R/configuracion-libro.R")
+```
+
+## Propósito del capítulo
+
+En el capítulo anterior vimos cómo trasladar un capital entre fechas mediante factores de acumulación y de descuento. El paso siguiente es comparar **conjuntos de pagos** que ocurren en momentos diferentes.
+
+Este problema aparece cuando una deuda se sustituye por otra, cuando varias obligaciones se reemplazan por un único pago, cuando se modifica el calendario de un préstamo o cuando se comparan los ingresos y egresos de una inversión. En todos estos casos, sumar directamente cantidades ubicadas en fechas diferentes ignora el valor temporal del dinero.
+
+Nuestra herramienta fundamental será la **ecuación de valor**: una igualdad financiera que se obtiene después de expresar todos los flujos en una fecha común, llamada **fecha focal** o **fecha de valoración**.
+
+## Perspectiva histórica
+
+La necesidad práctica de comparar pagos presentes y futuros precede a la notación moderna de las ecuaciones de valor. Con la expansión del comercio europeo, la aritmética mercantil incorporó problemas en los que una deuda debía sustituirse por otra, una renta debía comprarse por un capital único o varias cantidades futuras debían expresarse sobre una base financiera común. El desarrollo de tablas de interés compuesto redujo considerablemente la carga aritmética de estos cálculos.[^lew-compuesto]
+
+En Inglaterra, William Colson publicó en 1612 tablas de acumulación y de valor presente para pagos únicos y series de pagos. Un año después, Richard Witt publicó *Arithmeticall Questions* (1613), obra dedicada, entre otros asuntos, a la compra o intercambio de anualidades, arrendamientos, posesiones presentes y futuras y operaciones en las que debía reconocerse el valor temporal del dinero.[^witt-1613] Sus tablas permitían trabajar con pagos anuales, semestrales y trimestrales y con diferentes tasas de interés. Aunque Witt no utilizó la terminología actual, muchos de sus problemas presentan la estructura que hoy describimos mediante una ecuación de valor: trasladar obligaciones a una base temporal común antes de compararlas.[^lew-compuesto]
+
+La conexión con la matemática actuarial se hizo más profunda cuando la valoración financiera comenzó a combinarse con contingencias de vida. En 1693, Edmond Halley utilizó datos de mortalidad de Breslau para valorar anualidades sobre vidas. Su procedimiento consistía en calcular el valor presente de los pagos futuros y ponderarlos mediante las probabilidades correspondientes de supervivencia.[^halley-1693] La valoración actuarial incorporó así una dimensión probabilística a la operación financiera de expresar pagos futuros sobre una base temporal común.
+
+En este capítulo trabajamos exclusivamente con **flujos ciertos**. La ecuación de valor nos permitirá establecer equivalencias entre obligaciones situadas en fechas diferentes bajo una ley financiera determinada, y esta estructura reaparecerá en anualidades, amortización, bonos y, más adelante, en la valoración de contingencias de vida.
+
+Las ecuaciones de valor también son una herramienta recurrente en los problemas de matemática financiera del Exam FM de la Society of Actuaries. Más que identificar una fórmula, estos problemas exigen reconocer los flujos, sus fechas, la convención de tasa y la relación financiera que debe cumplirse.[^soa-fm]
+
+Seguiremos el mismo criterio del capítulo anterior: primero construimos y resolvemos la relación financiera; después usamos R y `tidyactuarial` para representar los flujos, reproducir el cálculo o auditar la solución.
+
+[^lew-compuesto]: C. G. Lewin, “The emergence of compound interest”, *British Actuarial Journal*, 24 (2019), e34. <https://doi.org/10.1017/S1357321719000254>.
+
+[^witt-1613]: Richard Witt, *Arithmeticall Questions*, Londres, 1613. Registro bibliográfico de la Folger Shakespeare Library: <https://catalog.folger.edu/record/409273>.
+
+[^halley-1693]: Edmond Halley, “An Estimate of the Degrees of the Mortality of Mankind; Drawn from Curious Tables of the Births and Funerals at the City of Breslaw; With an Attempt to Ascertain the Price of Annuities upon Lives”, *Philosophical Transactions*, 17 (1693), 596–610. <https://doi.org/10.1098/rstl.1693.0007>.
+
+[^soa-fm]: Society of Actuaries, *Exam FM—Financial Mathematics*, syllabus vigente para 2026. <https://www.soa.org/education/exam-req/edu-exam-fm-detail.aspx>.
+
+## Notación y convenciones
+
+Se mantendrá la notación introducida en el capítulo anterior.
+
+| Símbolo | Significado |
+|:--|:--|
+| $C_j$ | Flujo de caja ubicado en la fecha $t_j$ |
+| $t_j$ | Fecha correspondiente al flujo $C_j$ |
+| $f$ | Fecha focal o fecha de valoración |
+| $a(t)$ | Función de acumulación respecto de un origen común |
+| $a(s,t)$ | Factor de acumulación desde $s$ hasta $t$, con $s\le t$ |
+| $v(s,t)$ | Factor de descuento desde $t$ hasta $s$, con $s\le t$ |
+| $V(f)$ | Valor equivalente del conjunto de flujos en la fecha $f$ |
+| $i$ | Tasa efectiva de interés por periodo |
+| $i^{(m)}$ | Tasa nominal anual convertible $m$ veces |
+| $j_m$ | Tasa efectiva correspondiente al subperiodo $1/m$ |
+
+La notación $A(t)$ sigue reservada para un **monto acumulado**. Los factores que trasladan valores entre dos fechas los escribiremos $a(s,t)$ y $v(s,t)$:
+
+$$
+a(s,t)=\frac{a(t)}{a(s)},
+\qquad
+v(s,t)=\frac{a(s)}{a(t)}
+=\frac{1}{a(s,t)},
+\qquad s\le t.
+$$
+
+::: {.callout-note title="Convención del capítulo" icon=false}
+Salvo que se indique lo contrario, las tasas son efectivas anuales y los tiempos se expresan en años. Cuando aparezcan tasas nominales, fechas calendario o leyes financieras variables, indicaremos la convención antes de formular la ecuación de valor.
+:::
+
+## Flujos de caja, perspectiva y fecha focal
+
+Toda ecuación de valor comienza por identificar los flujos. Un diagrama de flujo de caja nos permite ubicarlos sobre un eje temporal y distinguir desde qué perspectiva se analiza la operación.
+
+::: {.callout-important title="Convención. Flechas, signos y perspectiva" icon=false}
+En los diagramas de flujo de caja del libro usaremos esta convención:
+
+- una flecha hacia arriba representa una entrada de dinero;
+- una flecha hacia abajo representa una salida;
+- la posición horizontal identifica la fecha del flujo;
+- la longitud de la flecha puede representar su magnitud, aunque se puede normalizar cuando interesa destacar la estructura temporal.
+
+Los signos dependen de la perspectiva. La cuota que paga un deudor es una salida para él y una entrada para el acreedor; por eso, antes de formular la ecuación, hay que fijar quién observa la operación.
+:::
+
+La **fecha focal** es la fecha que elegimos para expresar todos los flujos sobre una misma base temporal. No determina por sí misma la equivalencia financiera ni modifica los contratos involucrados: solo da el punto común en el que se comparan sus valores.
+
+Dibujar la línea de tiempo es el primer paso de casi cualquier problema de ecuaciones de valor, y también en el examen FM conviene hacerlo antes de escribir una sola fórmula. Con lápiz y papel el diagrama se hace a mano; en R lo hace `plot_cash_flow()`. Le damos los montos con su signo y sus fechas, y nos devuelve la línea de tiempo con las flechas ya orientadas según la convención anterior. Como la usaremos en casi todos los ejemplos del capítulo, conviene presentarla desde ahora.
+
+::: {.callout-note title="Función tidyactuarial: plot_cash_flow()" icon=false}
+`plot_cash_flow()` construye un diagrama temporal de una corriente de pagos. En este libro la usaremos como herramienta de **modelación y auditoría temporal**: nos deja revisar fechas, signos y perspectiva antes de formular la ecuación de valor.
+
+Sus argumentos de uso más frecuente son:
+
+| Argumento | Significado |
+|:--|:--|
+| `C` | Vector de flujos de caja con sus signos. |
+| `t` | Tiempos numéricos, expresados en años. |
+| `date` | Fechas calendario, cuando la operación no se describe mediante tiempos numéricos. |
+| `i` | Tasa utilizada cuando se desea incorporar información financiera al diagrama. |
+| `i_type` | Convención de la tasa suministrada. |
+| `m` | Frecuencia de conversión cuando la tasa es nominal. |
+| `normalize` | Permite normalizar la altura de las flechas cuando interesa privilegiar la lectura temporal. |
+
+La función reaparecerá en anualidades, amortización, bonos y otros capítulos donde la ubicación de los pagos forma parte del razonamiento financiero. Ojo: la gráfica no sustituye la ecuación de valor; ayuda a construirla bien y a visualizar mejor el problema.
+:::
+
+::: {.callout-tip title="Ejemplo. Perspectiva y convención de signos" icon=false}
+Suponga una inversión que requiere un desembolso de 1 000 en $t=0$ y entrega 1 200 en $t=2$. Desde la perspectiva del inversionista,
+
+$$
+C_0=-1\,000,
+\qquad
+C_2=1\,200.
+$$
+
+El primer flujo es negativo porque es una salida; el segundo es positivo porque es una entrada.
+
+```{r}
+#| label: flujo-convencion-signos
+
+plot_cash_flow(
+  C = c(-1000, 1200),                         # monto de cada flujo
+  t = c(0, 2),                                # tiempos, en años
+  title = "Flujo de una inversión",           # título
+  subtitle = "Perspectiva del inversionista"  # subtítulo
+)
+```
+
+La dirección de las flechas indica entradas y salidas, no acumulación ni descuento. Cómo se traslada cada flujo depende de su posición respecto de la fecha focal que elijamos.
+:::
+
+## Construcción de una ecuación de valor
+
+### Valor de un flujo en la fecha focal
+
+Sea $C_j$ un flujo ubicado en $t_j$ y sea $f$ una fecha focal. Si los traslados financieros proceden de una misma función de acumulación $a(t)$, el valor equivalente de $C_j$ en $f$ es
+
+$$
+\boxed{
+C_j\frac{a(f)}{a(t_j)}
+}.
+$$
+
+Esta expresión reúne los tres casos posibles.
+
+Si $t_j<f$, entonces
+
+$$
+\frac{a(f)}{a(t_j)}
+=
+a(t_j,f),
+$$
+
+por lo que el flujo se **acumula** desde $t_j$ hasta $f$.
+
+Si $t_j>f$, entonces
+
+$$
+\frac{a(f)}{a(t_j)}
+=
+v(f,t_j),
+$$
+
+por lo que el flujo se **descuenta** desde $t_j$ hasta $f$.
+
+Finalmente, si $t_j=f$,
+
+$$
+\frac{a(f)}{a(t_j)}=1,
+$$
+
+y el flujo ya se encuentra en la fecha focal.
+
+Entonces, para un conjunto de flujos $C_1,\ldots,C_n$ ubicados en las fechas $t_1,\ldots,t_n$, su valor equivalente en $f$ es
+
+$$
+\boxed{
+V(f)
+=
+\sum_{j=1}^{n}
+C_j\frac{a(f)}{a(t_j)}
+}.
+$$
+
+La misma expresión puede separarse según la posición de los flujos respecto de $f$:
+
+$$
+V(f)
+=
+\sum_{t_j<f} C_j a(t_j,f)
++
+\sum_{t_j=f} C_j
++
+\sum_{t_j>f} C_j v(f,t_j).
+$$
+
+Esta descomposición nos muestra directamente qué flujos hay que acumular, cuáles quedan sin cambio y cuáles hay que descontar.
+
+### Ecuación de valor
+
+Existen dos formas equivalentes de formular la comparación financiera.
+
+Si las obligaciones se separan en dos conjuntos, puede escribirse
+
+$$
+\boxed{
+\text{valor de un conjunto de obligaciones en }f
+=
+\text{valor del otro conjunto de obligaciones en }f.
+}
+$$
+
+Esta forma es natural, por ejemplo, cuando una deuda original se sustituye por una nueva obligación.
+
+Alternativamente, si todos los flujos se reúnen en una sola corriente mediante una convención de signos, la ecuación se escribe como
+
+$$
+\boxed{
+V(f)=0.
+}
+$$
+
+::: {.callout-note title="Definición. Ecuación de valor" icon=false}
+Una **ecuación de valor** es una igualdad que expresa la equivalencia financiera entre conjuntos de obligaciones después de trasladar todos sus flujos a una fecha focal mediante una ley financiera común.
+
+Con una convención de signos, la misma equivalencia se puede expresar haciendo cero el valor neto de los flujos:
+
+$$
+V(f)=0.
+$$
+:::
+
+La fecha focal permite comparar los flujos, pero **no crea la equivalencia**. Si los factores de traslado provienen de una ley financiera coherente, una relación de equivalencia válida en una fecha focal sigue siendo válida en cualquier otra.
+
+Bajo interés compuesto con tasa efectiva constante $i$,
+
+$$
+a(t)=(1+i)^t,
+$$
+
+por lo que
+
+$$
+\frac{a(f)}{a(t_j)}
+=
+(1+i)^{f-t_j}.
+$$
+
+Entonces,
+
+$$
+\boxed{
+V(f)
+=
+\sum_{j=1}^{n}
+C_j(1+i)^{f-t_j}
+}
+$$
+
+y una ecuación de valor bajo la convención de signos adopta la forma
+
+$$
+\boxed{
+\sum_{j=1}^{n}
+C_j(1+i)^{f-t_j}=0.
+}
+$$
+
+## Independencia de la fecha focal
+
+¿Por qué podemos escoger la fecha focal que más nos convenga? No es una regla práctica que haya que aceptar sin más. Veamos que es una consecuencia directa de la función de acumulación.
+
+Supóngase que una ecuación de valor se satisface en una fecha focal $f$. Entonces
+
+$$
+V(f)
+=
+\sum_{j=1}^{n}
+C_j\frac{a(f)}{a(t_j)}
+=
+a(f)
+\sum_{j=1}^{n}
+\frac{C_j}{a(t_j)}
+=
+0.
+$$
+
+Como una función de acumulación es positiva, $a(f)>0$. Por tanto,
+
+$$
+\sum_{j=1}^{n}
+\frac{C_j}{a(t_j)}
+=
+0.
+$$
+
+Sea ahora $g$ cualquier otra fecha focal. El valor de los mismos flujos en $g$ es
+
+$$
+V(g)
+=
+\sum_{j=1}^{n}
+C_j\frac{a(g)}{a(t_j)}
+=
+a(g)
+\sum_{j=1}^{n}
+\frac{C_j}{a(t_j)}.
+$$
+
+El último factor ya se ha demostrado igual a cero. En consecuencia,
+
+$$
+\boxed{V(g)=0.}
+$$
+
+::: {.callout-important title="Resultado. Independencia de la fecha focal" icon=false}
+Si todos los traslados financieros proceden de una misma función de acumulación positiva $a(t)$, una ecuación de valor satisfecha en una fecha focal también se satisface en cualquier otra.
+
+Entonces, la fecha focal se puede elegir por conveniencia algebraica. Lo que no podemos cambiar a nuestro antojo es la **ley financiera con la que trasladamos los flujos**.
+:::
+
+Este resultado no exige una tasa de interés constante; exige que los factores entre distintas fechas sean compatibles con una misma función de acumulación.
+
+Fíjese que en la demostración nunca usamos que la tasa fuera constante: solo usamos que todos los factores salen de una misma función de acumulación positiva $a(t)$. De hecho, la misma cuenta da algo más fuerte. Para dos fechas focales cualesquiera $f$ y $g$,
+
+$$
+V(g)
+=
+a(g)\sum_{j=1}^{n}\frac{C_j}{a(t_j)}
+=
+V(f)\,\frac{a(g)}{a(f)}.
+$$
+
+Cambiar de fecha focal multiplica el valor de toda la corriente por un mismo factor positivo. Por eso el valor no solo sigue siendo cero cuando lo era: tampoco cambia de signo.
+
+Esto permite generalizar el análisis a tasas que no son constantes. Si la ley financiera viene dada por una fuerza de interés variable $\delta(t)$, como vimos en el capítulo anterior,
+
+$$
+a(t)
+=
+\exp\left(\int_0^t\delta(u)\,du\right),
+$$
+
+y el factor que lleva un flujo desde $t_j$ hasta la fecha focal $f$ es
+
+$$
+\frac{a(f)}{a(t_j)}
+=
+\exp\left(\int_{t_j}^{f}\delta(u)\,du\right),
+$$
+
+entendiendo que la integral cambia de signo cuando $t_j>f$, y entonces el flujo se descuenta. La demostración anterior se aplica sin cambiar una línea. Lo mismo ocurre con tasas que cambian por tramos, que veremos más adelante en este capítulo.
+
+La generalización es muy interesante, pero también más compleja de lo que parece. Con tasas variables, el factor entre dos fechas depende de dónde están ubicadas y no solo de la distancia entre ellas, así que trasladar cada flujo exige integrar la fuerza, o multiplicar los factores, sobre el intervalo exacto que atraviesa. La equivalencia se conserva; lo que se pierde es la comodidad de las fórmulas cerradas, y muchas ecuaciones solo se pueden resolver numéricamente. Volveremos sobre esta idea en el capítulo de curvas spot y forward, donde la tasa depende del plazo.
+
+### Una precisión importante sobre el interés simple
+
+El interés simple nos sirve para ver por qué es esencial la coherencia de los factores de traslado.
+
+Si desde un origen común se define
+
+$$
+a(t)=1+it,
+$$
+
+entonces el factor de acumulación coherente entre dos fechas $s$ y $t$ es
+
+$$
+a(s,t)
+=
+\frac{a(t)}{a(s)}
+=
+\frac{1+it}{1+is},
+\qquad s\le t.
+$$
+
+Este factor satisface la propiedad de composición. Para $r\le s\le t$,
+
+$$
+a(r,s)a(s,t)
+=
+\frac{1+is}{1+ir}
+\frac{1+it}{1+is}
+=
+\frac{1+it}{1+ir}
+=
+a(r,t).
+$$
+
+Así, una ecuación de valor construida a partir de esta función conserva la independencia de la fecha focal.
+
+El problema aparece si se asigna a cada intervalo, de manera independiente, el factor local
+
+$$
+1+i(t-s).
+$$
+
+En general,
+
+$$
+\bigl[1+i(s-r)\bigr]
+\bigl[1+i(t-s)\bigr]
+\neq
+1+i(t-r).
+$$
+
+Los factores locales no cumplen la propiedad de composición y, por tanto, no son los cocientes de una única función de acumulación definida sobre todo el horizonte.
+
+::: {.callout-warning title="Consistencia temporal" icon=false}
+La independencia de la fecha focal no depende de que el modelo sea de interés compuesto; depende de usar una **misma ley financiera coherente** para trasladar todos los flujos.
+
+En interés simple, si partimos de $a(t)=1+it$ respecto de un origen común, obtenemos factores coherentes mediante
+
+$$
+a(s,t)=\frac{1+it}{1+is}.
+$$
+
+Aplicar $1+i(t-s)$ de manera independiente a cada intervalo es una construcción distinta y, en general, incompatible con la propiedad de composición.
+:::
+
+## Procedimiento general
+
+Antes de calcular, la ecuación de valor debe construirse a partir de la estructura financiera del problema.
+
+El procedimiento general será:
+
+1. **Establecer el origen y la unidad de tiempo.** Determinar qué fecha corresponde a $t=0$ y si los periodos se expresarán en años, meses u otra unidad.
+2. **Fijar la perspectiva.** Decidir desde cuál de las partes miraremos la operación —el deudor o el acreedor, el inversionista o la entidad— y, con esa elección, asignar signo positivo a lo que esa parte recibe y negativo a lo que entrega. La misma cuota es una salida para quien paga y una entrada para quien cobra, así que la perspectiva se fija una sola vez y se mantiene en toda la ecuación.
+3. **Ubicar los flujos.** Representar sobre el eje temporal todos los pagos conocidos y las cantidades desconocidas.
+4. **Identificar la ley financiera.** Determinar la tasa, su convención y los factores que trasladarán los valores entre fechas.
+5. **Identificar la incógnita o las incógnitas.** Establecer si se busca un monto, una fecha, una tasa u otra variable financiera. Si hay varias incógnitas, harán falta tantas condiciones independientes como incógnitas.
+6. **Elegir una fecha focal conveniente.** La elección puede simplificar el álgebra, pero no modifica la equivalencia cuando la ley financiera es coherente. En muchos casos se usa $t=0$, porque así cada flujo queda expresado como un valor presente; cuando la incógnita es un pago en una fecha conocida, suele convenir tomar esa misma fecha.
+7. **Trasladar todos los flujos a la fecha focal.** Cada término de la ecuación debe corresponder a un flujo identificable sobre la línea de tiempo.
+8. **Formular y resolver la ecuación.** La solución puede obtenerse de forma cerrada o requerir un método numérico.
+9. **Comprobar el dominio financiero.** Una raíz algebraica o numérica no constituye automáticamente una solución admisible.
+10. **Interpretar y auditar el resultado.** Sustituir la solución en la ecuación original y verificar su significado dentro del contrato.
+
+La naturaleza de la incógnita nos permite anticipar el tipo de problema. Un **monto desconocido** conduce con frecuencia a una ecuación lineal; una **fecha desconocida** suele aparecer en un exponente; y una **tasa desconocida** conduce, en general, a una ecuación no lineal. Esta clasificación la iremos desarrollando a lo largo del capítulo.
+
+::: {.callout-tip title="Ejemplo. La fecha de los pagos sí importa" icon=false}
+Una persona debe pagar 1 000 hoy y 500 dentro de un año, y ambas obligaciones se sustituirán por un único pago $X$ al final del segundo año. La tasa efectiva anual acordada es del $6\%$.
+
+La línea de tiempo contiene tres fechas relevantes:
+
+- $1\,000$ en $t=0$;
+- $500$ en $t=1$;
+- $X$ en $t=2$.
+
+Elegimos $t=2$ como fecha focal. El primer pago se acumula durante dos años y el segundo durante uno. Entonces,
+
+$$
+X
+=
+1\,000(1.06)^2
++
+500(1.06).
+$$
+
+Así,
+
+$$
+X
+=
+1\,123.60+530
+=
+\boxed{1\,653.60}.
+$$
+
+Escribir simplemente
+
+$$
+X=1\,000+500=1\,500
+$$
+
+suma cantidades monetarias, pero no establece una equivalencia financiera: los dos pagos originales están ubicados en fechas diferentes.
+
+Este ejemplo contiene la estructura que repetiremos en el resto del capítulo: identificar los flujos, elegir una fecha focal, trasladar cada cantidad y solo entonces construir la ecuación de valor.
+:::
+
+
+## Sustitución de obligaciones
+
+Una aplicación inmediata de las ecuaciones de valor es reemplazar una o varias obligaciones por un nuevo conjunto de pagos financieramente equivalente.
+
+La sustitución no exige que los montos nominales de las obligaciones originales y nuevas sean iguales; exige que sus **valores equivalentes en una fecha común**, calculados bajo la ley financiera acordada, coincidan.
+
+### Monto desconocido
+
+::: {.callout-tip title="Ejemplo. Sustitución de obligaciones" icon=false}
+Paola debe pagar 800 al finalizar el primer año y 1 200 al finalizar el tercero, y ambas obligaciones se sustituirán por un único pago $X$ en $t=2$. La tasa efectiva anual acordada es del $6\%$.
+
+**Análisis**
+
+Desde la perspectiva del acreedor, los pagos originales son entradas. El calendario de obligaciones es:
+
+- 800 en $t=1$;
+- $X$ en $t=2$;
+- 1 200 en $t=3$.
+
+El monto $X$ es la incógnita. Como su fecha ya está fijada en $t=2$, lo natural es tomar esa misma fecha como fecha focal.
+
+```{r}
+#| label: flujo-obligaciones-originales
+
+plot_cash_flow(
+  C = c(800, 1200),                                   # monto de cada flujo
+  t = c(1, 3),                                        # tiempos, en años
+  i = 0.06,                                           # tasa efectiva anual
+  title = "Obligaciones originales",                  # título
+  subtitle = "El pago sustituto se ubicará en t = 2"  # subtítulo
+)
+```
+
+**Ecuación de valor**
+
+El pago de 800 está un año antes de la fecha focal. Su valor en $t=2$ es
+
+$$
+800(1.06)^{2-1}
+=
+800(1.06)
+=
+848.
+$$
+
+El pago de 1 200 está un año después de la fecha focal. Su valor en $t=2$ es
+
+$$
+1\,200(1.06)^{2-3}
+=
+\frac{1\,200}{1.06}
+\approx
+1\,132.08.
+$$
+
+Entonces, la ecuación de valor en $t=2$ es
+
+$$
+X
+=
+800(1.06)
++
+\frac{1\,200}{1.06}.
+$$
+
+De aquí,
+
+$$
+\boxed{X\approx1\,980.08}.
+$$
+
+El nuevo pago no es $800+1\,200=2\,000$, porque las dos obligaciones originales quedan a lados diferentes de la fecha focal: una se acumula y la otra se descuenta.
+
+**Comprobación con otra fecha focal**
+
+La independencia de la fecha focal nos permite comprobar el resultado con $t=0$.
+
+El valor presente de las obligaciones originales es
+
+$$
+\frac{800}{1.06}
++
+\frac{1\,200}{(1.06)^3}.
+$$
+
+El pago sustituto se encuentra en $t=2$, por lo que su valor presente es
+
+$$
+\frac{X}{(1.06)^2}.
+$$
+
+La ecuación
+
+$$
+\frac{800}{1.06}
++
+\frac{1\,200}{(1.06)^3}
+=
+\frac{X}{(1.06)^2}
+$$
+
+produce nuevamente
+
+$$
+X\approx1\,980.08.
+$$
+
+No es una segunda equivalencia: es la misma relación financiera expresada en otra fecha focal.
+
+**Verificación con `tidyactuarial`**
+
+Las funciones `future_value()` y `present_value()` ya las conocemos del capítulo anterior; aquí las usamos para reproducir los dos traslados de la ecuación de valor.
+
+```{r}
+#| label: auditoria-sustitucion-obligaciones
+
+x_analitico <- 800 * 1.06 + 1200 / 1.06
+
+x_tidy <- future_value(
+  C = 800,            # monto de cada flujo
+  i = 0.06,           # tasa efectiva anual
+  t = 1               # tiempo, en años
+) +
+  present_value(
+    C = 1200,         # monto de cada flujo
+    i = 0.06,         # tasa efectiva anual
+    t = 1             # tiempo, en años
+  )
+
+vp_original <- pv_flow(
+  cf = c(800, 1200),  # flujos, con signo
+  i = 0.06,           # tasa efectiva anual
+  t = c(1, 3)         # tiempos, en años
+)
+
+vp_sustituto <- present_value(
+  C = x_analitico,    # monto de cada flujo
+  i = 0.06,           # tasa efectiva anual
+  t = 2               # tiempo, en años
+)
+```
+
+La primera comprobación reproduce directamente el valor del pago sustituto en $t=2$; la segunda lleva a $t=0$ tanto las obligaciones originales como el nuevo pago.
+
+```{r}
+#| label: tabla-auditoria-sustitucion-obligaciones
+#| echo: false
+#| results: asis
+
+tibble(
+  magnitud = c("Pago en t = 2", "Valor presente"),
+  analitico = c(x_analitico, vp_original),
+  tidyactuarial = c(x_tidy, vp_sustituto)
+) |>
+  tabla_comparacion(
+    titulo = "Sustitución de obligaciones: comprobación en dos fechas",
+    digits = 2
+  )
+```
+
+La equivalencia se estableció con la tasa contractual del $6\%$. Si después cambian las tasas de mercado, el acuerdo sigue cumpliendo la ecuación de valor con la tasa pactada, aunque su valor económico de mercado sí puede cambiar para alguna de las partes.
+:::
+
+Este primer ejemplo es el caso algebraicamente más sencillo: **la incógnita es un monto**. Como los factores financieros son conocidos, $X$ aparece de forma lineal en la ecuación de valor.
+
+El problema cambia cuando el monto es conocido y la incógnita es la fecha en la que debe hacerse el pago.
+
+## Fecha desconocida de un pago sustituto
+
+Cuando la fecha es desconocida, la variable queda dentro del factor de acumulación o de descuento y, bajo interés compuesto, esto lleva normalmente a una ecuación exponencial.
+
+No basta con obtener un número. Una fecha financieramente admisible tiene que respetar las condiciones del problema y, si la solución sale de un método numérico, conviene justificar antes un intervalo en el que pueda encontrarse.
+
+::: {.callout-tip title="Ejemplo. Fecha desconocida de un pago" icon=false}
+Una empresa debe pagar 4 000 al finalizar el primer año y 7 000 al finalizar el cuarto, y quiere sustituir ambas obligaciones por un único pago de 12 000 en una fecha desconocida $x$. La tasa efectiva anual es del $8\%$.
+
+**Análisis**
+
+Los flujos originales están en $t=1$ y $t=4$. El monto del pago sustituto lo conocemos; lo que no sabemos es su fecha $x$.
+
+Elegimos $t=0$ como fecha focal, de modo que las tres obligaciones se expresan directamente como valores presentes.
+
+La ecuación de valor es
+
+$$
+\frac{4\,000}{1.08}
++
+\frac{7\,000}{(1.08)^4}
+=
+\frac{12\,000}{(1.08)^x}.
+$$
+
+**Resolución analítica**
+
+El valor presente de las obligaciones originales es
+
+$$
+V_0
+=
+\frac{4\,000}{1.08}
++
+\frac{7\,000}{(1.08)^4}
+\approx
+8\,848.91.
+$$
+
+Así,
+
+$$
+\frac{12\,000}{(1.08)^x}
+=
+V_0,
+$$
+
+de donde
+
+$$
+(1.08)^x
+=
+\frac{12\,000}{V_0}.
+$$
+
+Tomando logaritmos,
+
+$$
+x\log(1.08)
+=
+\log\left(\frac{12\,000}{V_0}\right),
+$$
+
+y finalmente
+
+$$
+\boxed{
+x
+=
+\frac{
+\log(12\,000/V_0)
+}{
+\log(1.08)
+}
+\approx
+3.9580.
+}
+$$
+
+El pago debe hacerse aproximadamente $3.9580$ años después de la fecha inicial, es decir, poco antes de terminar el cuarto año.
+
+**Existencia y unicidad**
+
+Antes de aceptar el resultado, comprobemos que su ubicación es financieramente consistente.
+
+Sea
+
+$$
+F(x)=12\,000(1.08)^{-x},
+$$
+
+el valor presente del pago sustituto cuando se realiza en la fecha $x$.
+
+En $x=3$,
+
+$$
+F(3)
+=
+\frac{12\,000}{(1.08)^3}
+\approx
+9\,525.99,
+$$
+
+mientras que en $x=4$,
+
+$$
+F(4)
+=
+\frac{12\,000}{(1.08)^4}
+\approx
+8\,820.36.
+$$
+
+Como
+
+$$
+8\,820.36
+<
+8\,848.91
+<
+9\,525.99,
+$$
+
+y $F$ es continua, el teorema del valor intermedio garantiza que la fecha buscada está entre los años 3 y 4. Enunciaremos el teorema formalmente en la sección de tasa desconocida.
+
+Además,
+
+$$
+F'(x)
+=
+-12\,000\log(1.08)(1.08)^{-x}
+<
+0,
+$$
+
+porque $\log(1.08)>0$. Por tanto, $F(x)$ es estrictamente decreciente.
+
+Existe, entonces, una **única** fecha $x\in(3,4)$ cuyo valor presente es igual al de las obligaciones originales.
+
+**Verificación con `tidyactuarial`**
+
+La solución analítica es posible porque aquí la incógnita se puede aislar con logaritmos. Aun así, el mismo problema se puede plantear como una ecuación escalar y resolverse numéricamente.
+
+Usaremos `solve_value()` para reproducir la solución, no para reemplazar la formulación anterior.
+:::
+
+::: {.callout-note title="Función tidyactuarial: solve_value()" icon=false}
+`solve_value()` resuelve una **única incógnita escalar continua** dentro de una función financiera dada.
+
+El problema se expresa computacionalmente como
+
+$$
+g(x)
+=
+f(\ldots,x,\ldots)
+-
+\text{target}
+=
+0,
+$$
+
+donde `fn` identifica la función financiera $f$ y `solve_for` indica cuál de sus argumentos es la incógnita.
+
+Sus argumentos principales son:
+
+| Argumento | Significado |
+|:--|:--|
+| `fn` | Función financiera que se desea igualar a un objetivo. |
+| `solve_for` | Nombre del argumento que actúa como incógnita. |
+| `target` | Valor que debe reproducir `fn`. |
+| `args` | Lista con los argumentos conocidos de la función. |
+| `interval` | Intervalo financieramente admisible en el que se busca la solución. |
+| `method` | Método numérico utilizado para resolver la ecuación. |
+| `output` | Tipo de resultado solicitado. |
+
+El intervalo no se elige al azar: siempre que sea posible, hay que justificarlo a partir de la estructura financiera del problema.
+
+`solve_value()` trabaja con una incógnita continua. Si el contrato exige una variable discreta —por ejemplo, un número entero de pagos—, la solución continua no se puede tomar sin más como solución contractual.
+:::
+
+En el ejemplo anterior, la función financiera es `present_value()`, el argumento desconocido es `t` y el objetivo es el valor presente de las obligaciones originales.
+
+```{r}
+#| label: auditoria-fecha-desconocida
+
+vp_obligaciones <- pv_flow(
+  cf = c(4000, 7000),        # flujos, con signo
+  i = 0.08,                  # tasa efectiva anual
+  t = c(1, 4)                # tiempos, en años
+)
+
+fecha_analitica <- log(12000 / vp_obligaciones) / log(1.08)
+
+fecha_tidy <- solve_value(
+  fn = present_value,        # función financiera que se invierte
+  solve_for = "t",           # argumento desconocido
+  target = vp_obligaciones,  # valor objetivo de la ecuación
+  args = list(
+    C = 12000,
+    i = 0.08
+  ),
+  interval = c(3, 4),        # intervalo de búsqueda de la raíz
+  method = "uniroot"         # método numérico
+)
+
+residuo_fecha <- present_value(
+  C = 12000,                 # monto de cada flujo
+  i = 0.08,                  # tasa efectiva anual
+  t = fecha_tidy             # tiempo, en años
+) - vp_obligaciones
+```
+
+La comparación debe considerar tanto la solución obtenida como el **residuo**
+
+$$
+R
+=
+12\,000(1.08)^{-x}
+-
+V_0.
+$$
+
+Un residuo cercano a cero confirma que la fecha calculada satisface la ecuación dentro de la tolerancia del método.
+
+```{r}
+#| label: tabla-auditoria-fecha-desconocida
+#| echo: false
+#| results: asis
+
+tibble(
+  metodo = c("Despeje logarítmico", "solve_value()"),
+  fecha = c(fecha_analitica, fecha_tidy),
+  residuo = c(
+    present_value(
+      C = 12000,
+      i = 0.08,
+      t = fecha_analitica
+    ) - vp_obligaciones,
+    residuo_fecha
+  )
+) |>
+  mutate(
+    fecha = round(fecha, 4),
+    residuo = round(residuo, 8)
+  ) |>
+  tabla_resultado(
+    titulo = "Fecha del pago sustituto: solución y residuo",
+    digits = 4,
+    align = c("l", "r", "r")
+  )
+```
+
+El cálculo computacional reproduce la solución analítica. Y algo más importante: el intervalo de `solve_value()` no lo decidió el software; lo establecimos antes con la ecuación de valor, la comparación de valores presentes y la monotonía de $F(x)$.
+
+### Monto y fecha: dos estructuras diferentes
+
+Los dos problemas anteriores usan la misma idea financiera, pero producen ecuaciones matemáticamente distintas.
+
+Cuando el monto es desconocido,
+
+$$
+X
+=
+\sum_j C_j\frac{a(f)}{a(t_j)},
+$$
+
+y, conocidos los factores financieros, la ecuación es lineal en $X$.
+
+Cuando la fecha es desconocida bajo interés compuesto,
+
+$$
+C(1+i)^{-x}
+=
+V_0,
+$$
+
+la incógnita aparece en el exponente. A veces se despeja con logaritmos; otras veces toca recurrir a un método numérico.
+
+En ambos casos el punto de partida es el mismo: **identificar los flujos, elegir una fecha focal y construir la ecuación de valor antes de resolverla**.
+
+
+## Valoración de flujos
+
+La ecuación de valor nos permite comparar dos conjuntos de obligaciones, pero la misma estructura sirve para valorar una corriente completa de ingresos y egresos en cualquier fecha.
+
+Para flujos $C_j$ ubicados en fechas $t_j$, su valor en una fecha focal $f$ es
+
+$$
+V(f)
+=
+\sum_{j=1}^{n}
+C_j\frac{a(f)}{a(t_j)}.
+$$
+
+Bajo interés compuesto con tasa efectiva anual constante $i$,
+
+$$
+\frac{a(f)}{a(t_j)}
+=
+(1+i)^{f-t_j},
+$$
+
+y por tanto
+
+$$
+\boxed{
+V(f)
+=
+\sum_{j=1}^{n}
+C_j(1+i)^{f-t_j}.
+}
+$$
+
+Dos casos particulares son especialmente frecuentes. En $f=0$,
+
+$$
+\boxed{
+V(0)
+=
+\sum_{j=1}^{n}
+C_j(1+i)^{-t_j},
+}
+$$
+
+mientras que en una fecha futura $T$,
+
+$$
+\boxed{
+V(T)
+=
+\sum_{j=1}^{n}
+C_j(1+i)^{T-t_j}.
+}
+$$
+
+Ambos valores están relacionados mediante
+
+$$
+V(T)=V(0)(1+i)^T.
+$$
+
+No son valoraciones distintas de la operación: es el mismo conjunto de flujos expresado en dos fechas.
+
+::: {.callout-note title="Definición. Valor presente neto" icon=false}
+Cuando los signos representan los ingresos y egresos de una inversión o de un proyecto, $V(0)$ se llama **valor presente neto (VPN)**, y $V(T)$, medido al final del horizonte, **valor futuro neto**. Para una tasa de valoración dada, un VPN positivo significa que, desde la perspectiva adoptada, el valor presente de las entradas supera al de las salidas.
+:::
+
+La relación $V(T)=V(0)(1+i)^T$ tiene una lectura directa en la evaluación de proyectos. Allí, la tasa de valoración $i$ suele ser la **tasa de interés de oportunidad (TIO)**: el rendimiento que se obtendría colocando el mismo dinero en la mejor alternativa disponible con un riesgo comparable. Con esa lectura, un VPN positivo dice que el proyecto deja, en pesos de hoy, más de lo que dejaría la alternativa. El valor futuro neto dice lo mismo en pesos del año $T$: es la riqueza adicional con la que termina el inversionista frente a haber colocado su dinero a la tasa $i$.
+
+Como $(1+i)^T>0$,
+
+$$
+V(0)>0
+\quad\Longleftrightarrow\quad
+V(T)>0,
+$$
+
+así que los dos criterios llevan siempre a la misma decisión: aceptar el proyecto si el valor es positivo y rechazarlo si es negativo. Da igual evaluarlo con el VPN o con el valor futuro neto; es la independencia de la fecha focal aplicada a una decisión de inversión. Lo único que cambia es la unidad en que se expresa la ganancia: pesos de hoy o pesos del final del horizonte.
+
+::: {.callout-tip title="Ejemplo. Valoración de una corriente de flujos" icon=false}
+Un acuerdo de inversión produce distribuciones de 800, 1 200 y 1 500 en los años 1, 3 y 6, respectivamente, y en el año 5 exige un aporte adicional de 500.
+
+Desde la perspectiva del inversionista, los flujos son
+
+$$
+(800,\ 1\,200,\ -500,\ 1\,500)
+$$
+
+en las fechas
+
+$$
+(1,\ 3,\ 5,\ 6).
+$$
+
+Con una tasa efectiva anual del $7\%$, su valor presente es
+
+$$
+V(0)
+=
+\frac{800}{1.07}
++
+\frac{1\,200}{(1.07)^3}
+-
+\frac{500}{(1.07)^5}
++
+\frac{1\,500}{(1.07)^6}.
+$$
+
+Es decir,
+
+$$
+\boxed{V(0)=2\,370.24}.
+$$
+
+El valor equivalente al finalizar el sexto año es
+
+$$
+V(6)
+=
+V(0)(1.07)^6,
+$$
+
+de donde
+
+$$
+\boxed{V(6)=3\,557.09}.
+$$
+
+```{r}
+#| label: flujo-general-grafico
+
+flujo_inversion <- tibble(
+  t = c(1, 3, 5, 6),
+  C = c(800, 1200, -500, 1500)
+)
+
+flujo_inversion |>
+  plot_cash_flow(
+    C = C,                                       # monto de cada flujo
+    t = t,                                       # tiempo, en años
+    i = 0.07,                                    # tasa efectiva anual
+    title = "Distribuciones y aporte adicional"  # título
+  )
+```
+
+El aporte del año 5 aparece con signo negativo porque es una salida para el inversionista. La gráfica nos deja verificar la perspectiva antes de valorar.
+
+Si el $7\%$ es la tasa de oportunidad del inversionista, $2\,370.24$ es lo máximo que debería pagar hoy por entrar al acuerdo: si paga menos, el VPN de la operación completa es positivo. Medido al final del sexto año, ese mismo límite equivale a $3\,557.09$.
+:::
+
+::: {.callout-note title="Funciones tidyactuarial: pv_flow() y fv_flow()" icon=false}
+En el capítulo anterior vimos `present_value()` y `future_value()` para pagos individuales. Para una corriente completa, `pv_flow()` y `fv_flow()` reciben los flujos y sus fechas al mismo tiempo.
+
+Sus argumentos de uso más frecuente son:
+
+| Argumento | Significado |
+|:--|:--|
+| `cf` | Vector de flujos de caja, conservando sus signos. |
+| `i` | Tasa de interés utilizada para la valoración. |
+| `t` | Tiempos numéricos expresados en años. |
+| `date` | Fechas calendario; se utiliza en lugar de `t`. |
+| `i_type` | Convención de la tasa suministrada. |
+| `m` | Frecuencia de conversión cuando la tasa es nominal. |
+| `day_count` | Convención utilizada para transformar fechas calendario en fracciones de año. |
+
+Con tasa efectiva constante y tiempos numéricos,
+
+$$
+\texttt{pv\_flow()}
+\quad\longleftrightarrow\quad
+\sum_j C_j(1+i)^{-t_j}.
+$$
+
+Por su parte, `fv_flow()` traslada la corriente hasta la fecha final correspondiente.
+
+Estas funciones sistematizan la valoración de una corriente; no cambian la ecuación financiera que la define.
+:::
+
+```{r}
+#| label: auditoria-flujo-general
+
+vp_analitico <- 800 / 1.07 +
+  1200 / 1.07^3 -
+  500 / 1.07^5 +
+  1500 / 1.07^6
+
+vf_analitico <- vp_analitico * 1.07^6
+
+vp_tidy <- pv_flow(
+  cf = flujo_inversion$C,  # flujos, con signo
+  i = 0.07,                # tasa efectiva anual
+  t = flujo_inversion$t    # tiempo, en años
+)
+
+vf_tidy <- fv_flow(
+  cf = flujo_inversion$C,  # flujos, con signo
+  i = 0.07,                # tasa efectiva anual
+  t = flujo_inversion$t    # tiempo, en años
+)
+```
+
+```{r}
+#| label: tabla-auditoria-flujo-general
+#| echo: false
+#| results: asis
+
+tibble(
+  magnitud = c("Valor presente", "Valor en t = 6"),
+  analitico = c(vp_analitico, vf_analitico),
+  tidyactuarial = c(vp_tidy, vf_tidy)
+) |>
+  tabla_comparacion(
+    titulo = "Valoración del flujo: resultado analítico y computacional",
+    digits = 2
+  )
+```
+
+La comparación reproduce los valores que obtuvimos a mano y completa la auditoría analítico-computacional.
+
+## Tasa desconocida
+
+Hasta aquí la ley financiera ha sido conocida y las incógnitas han sido un monto o una fecha. El tercer caso fundamental aparece cuando los flujos y sus fechas son conocidos, pero hay que determinar la tasa que hace equivalentes las entradas y las salidas.
+
+Bajo interés compuesto, tomando $t=0$ como fecha focal, la ecuación es
+
+$$
+\boxed{
+F(i)
+=
+\sum_{j=0}^{n}
+C_j(1+i)^{-t_j}
+=
+0,
+\qquad i>-1.
+}
+$$
+
+El dominio $i>-1$ garantiza que $1+i>0$ y que los factores financieros sigan definidos en el modelo usual.
+
+A diferencia de un monto desconocido, la tasa aparece dentro de los factores de descuento; por eso la ecuación es, en general, **no lineal** en $i$.
+
+La resolución puede seguir tres situaciones:
+
+1. la tasa puede aislarse directamente;
+2. una transformación algebraica reduce el problema a una ecuación conocida;
+3. la ecuación requiere un método numérico.
+
+En todos los casos, formulamos la ecuación de valor antes de escoger el método de solución.
+
+### Un caso con solución algebraica
+
+::: {.callout-tip title="Ejemplo. Tasa desconocida con solución algebraica" icon=false}
+Una cooperativa desembolsa COP 18 millones en $t=0$ y recibe COP 7 millones en $t=2$ y COP 15 millones en $t=4$.
+
+Desde la perspectiva de la cooperativa, la ecuación de valor es
+
+$$
+-18
++
+7(1+i)^{-2}
++
+15(1+i)^{-4}
+=
+0.
+$$
+
+Equivalentemente,
+
+$$
+18
+=
+7(1+i)^{-2}
++
+15(1+i)^{-4}.
+$$
+
+Introduciendo
+
+$$
+y=(1+i)^{-2},
+$$
+
+se obtiene
+
+$$
+15y^2+7y-18=0.
+$$
+
+La ecuación cuadrática tiene raíces
+
+$$
+y
+=
+\frac{-7\pm\sqrt{1129}}{30}.
+$$
+
+Como
+
+$$
+y=(1+i)^{-2}>0,
+$$
+
+solo la raíz positiva es financieramente admisible:
+
+$$
+y
+=
+\frac{-7+\sqrt{1129}}{30}
+\approx
+0.8867.
+$$
+
+La otra raíz,
+
+$$
+y
+=
+\frac{-7-\sqrt{1129}}{30}
+\approx
+-1.3534,
+$$
+
+satisface la ecuación cuadrática, pero no corresponde a ninguna tasa: no existe $i>-1$ con $(1+i)^{-2}<0$. Es una **raíz espuria**, introducida por el cambio de variable $y=(1+i)^{-2}$: la ecuación en $y$ admite valores que la expresión original nunca puede tomar. Por eso la descartamos. No la descartamos por dar una tasa negativa, sino porque no proviene de ninguna tasa.
+
+De aquí,
+
+$$
+i
+=
+y^{-1/2}-1
+\approx
+0.0620,
+$$
+
+y la tasa efectiva anual es
+
+$$
+\boxed{i\approx6.20\%}.
+$$
+
+```{r}
+#| label: flujo-tasa-desconocida
+
+plot_cash_flow(
+  C = c(-18, 7, 15),                     # monto de cada flujo
+  t = c(0, 2, 4),                        # tiempos, en años
+  title = "Flujo con tasa desconocida",  # título
+  amount_label = "Millones de COP"       # etiqueta del eje y
+)
+```
+
+La transformación algebraica nos permitió resolver el problema sin un algoritmo numérico, y la restricción $y>0$ muestra por qué no toda raíz algebraica se acepta automáticamente.
+:::
+
+### Existencia y unicidad en un flujo convencional
+
+Consideremos una inversión con un desembolso inicial $C_0<0$ seguido únicamente por entradas positivas $C_j>0$, $j\geq1$. Su función de valor es
+
+$$
+F(i)
+=
+C_0+
+\sum_{j=1}^{n}C_j(1+i)^{-t_j}.
+$$
+
+Su derivada es
+
+$$
+F'(i)
+=
+-
+\sum_{j=1}^{n}
+t_jC_j(1+i)^{-t_j-1}.
+$$
+
+Para $i>-1$,
+
+$$
+F'(i)<0.
+$$
+
+Entonces $F$ es estrictamente decreciente y, en consecuencia, puede tener **a lo sumo una raíz**.
+
+Para la existencia usamos un resultado clásico del cálculo.
+
+::: {.callout-important title="Resultado. Teorema del valor intermedio" icon=false}
+Si $F$ es continua en un intervalo cerrado $[a,b]$ y $F(a)$ y $F(b)$ tienen signos opuestos, entonces existe al menos un $c\in(a,b)$ tal que $F(c)=0$.
+:::
+
+Nuestra $F$ cumple la hipótesis de continuidad en todo $(-1,\infty)$: es una suma finita de funciones de la forma $C_j(1+i)^{-t_j}$, y cada una es continua cuando $1+i>0$. Así, si existen $a<b$ en ese dominio tales que
+
+$$
+F(a)F(b)<0,
+$$
+
+el teorema del valor intermedio garantiza que existe una raíz en $(a,b)$, y la monotonía garantiza que esa raíz es única.
+
+Este resultado permite distinguir dos preguntas diferentes:
+
+- **existencia:** ¿la ecuación alcanza el valor cero en el dominio considerado?;
+- **unicidad:** si lo alcanza, ¿puede hacerlo más de una vez?
+
+Ambas preguntas deben preceder, cuando sea posible, a la solución numérica.
+
+### Resolución mediante Newton
+
+::: {.callout-tip title="Ejemplo. Tasa desconocida mediante Newton" icon=false}
+Una firma de consultoría le propone a la aseguradora donde trabaja Paola participar en un proyecto. La aseguradora invertiría COP 16 millones al inicio y recibiría COP 4 millones en el año 1, COP 6.5 millones en el año 3 y COP 9 millones en el año 5. Antes de llevar la propuesta al comité de inversiones, Paola quiere conocer la tasa de rendimiento del proyecto.
+
+Desde la perspectiva de la aseguradora, y expresando los montos en millones de pesos,
+
+$$
+F(i)
+=
+-16+
+\frac{4}{1+i}
++
+\frac{6.5}{(1+i)^3}
++
+\frac{9}{(1+i)^5}.
+$$
+
+Buscamos una tasa $i>-1$ tal que
+
+$$
+F(i)=0.
+$$
+
+Evaluando dos tasas cercanas,
+
+$$
+F(0.05)\approx0.4762>0,
+$$
+
+mientras que
+
+$$
+F(0.06)\approx-0.0436<0.
+$$
+
+Verifiquemos las hipótesis del teorema del valor intermedio en $[0.05,\,0.06]$. La función $F$ es continua en ese intervalo, porque en todos sus puntos $1+i>0$, y $F(0.05)$ y $F(0.06)$ tienen signos opuestos. Por el teorema, existe una raíz en
+
+$$
+(0.05,0.06).
+$$
+
+Además,
+
+$$
+F'(i)
+=
+-\frac{4}{(1+i)^2}
+-\frac{19.5}{(1+i)^4}
+-\frac{45}{(1+i)^6}
+<0.
+$$
+
+La función es estrictamente decreciente, así que la raíz encontrada en ese intervalo es única.
+
+El método de Newton genera la sucesión
+
+$$
+i_{k+1}
+=
+i_k-\frac{F(i_k)}{F'(i_k)}.
+$$
+
+Tomando $i_0=0.06$:
+
+| $k$ | $i_k$ | $F(i_k)$ |
+|--:|--:|--:|
+| 0 | 0.0600 | -0.0436 |
+| 1 | 0.0591 | 0.0001 |
+| 2 | 0.0591 | 0.0000 |
+
+Luego,
+
+$$
+\boxed{i\approx5.9143\%}.
+$$
+
+```{r}
+#| label: flujo-proyecto-consultoria
+
+plot_cash_flow(
+  C = c(-16, 4, 6.5, 9),                        # monto de cada flujo
+  t = c(0, 1, 3, 5),                            # tiempos, en años
+  title = "Flujo del proyecto de consultoría",  # título
+  amount_label = "Millones de COP"              # etiqueta del eje y
+)
+```
+
+Con este resultado, Paola puede presentar el proyecto con una cifra clara: rinde aproximadamente $5.91\%$ efectivo anual. Si la tasa de oportunidad de la aseguradora es mayor, el proyecto no conviene.
+:::
+
+El método numérico no establece por sí mismo que la raíz exista ni que sea única; en este ejemplo justificamos esas propiedades antes de iniciar las iteraciones.
+
+### Verificación con `tidyactuarial`
+
+::: {.callout-note title="Función tidyactuarial: irr_flow()" icon=false}
+`irr_flow()` calcula una **tasa interna de retorno (TIR)** de una corriente de flujos, es decir, una tasa efectiva anual $r$ que satisface
+
+$$
+\sum_k C_k(1+r)^{-t_k}=0.
+$$
+
+Los argumentos principales son:
+
+| Argumento | Significado |
+|:--|:--|
+| `cf` | Vector de flujos de caja, conservando sus signos. |
+| `t` | Fechas de los flujos expresadas numéricamente en años. |
+| `date` | Fechas calendario, utilizadas en lugar de `t`. |
+| `interval` | Intervalo en el que se busca encerrar la raíz. |
+
+En la salida podemos comprobar la tasa obtenida, el VPN residual y la convergencia del procedimiento.
+
+El intervalo debe salir del análisis financiero de la función de valor; la función no reemplaza el estudio previo de existencia, dominio o unicidad.
+:::
+
+```{r}
+#| label: auditoria-tir-unica
+
+tir_newton <- 0.05914297
+
+tir_paquete <- irr_flow(
+  cf = c(-16, 4, 6.5, 9) * 1e6,  # flujos, con signo
+  t = c(0, 1, 3, 5),             # tiempos, en años
+  interval = c(0.05, 0.06)       # intervalo de búsqueda de la raíz
+)
+```
+
+```{r}
+#| label: tabla-auditoria-tir-unica
+#| echo: false
+#| results: asis
+
+tibble(
+  metodo = c("Método de Newton", "irr_flow()"),
+  tir = c(
+    tir_newton,
+    tir_paquete |>
+      dplyr::pull(irr)
+  ),
+  vpn = c(
+    pv_flow(
+      cf = c(-16, 4, 6.5, 9) * 1e6,
+      t = c(0, 1, 3, 5),
+      i = tir_newton
+    ),
+    tir_paquete |>
+      dplyr::pull(npv)
+  )
+) |>
+  transmute(
+    Método = metodo,
+    `TIR efectiva anual` =
+      paste0(formatC(100 * tir, digits = 4, format = "f"), "%"),
+    `VPN residual (COP)` =
+      formatC(vpn, digits = 2, format = "f")
+  ) |>
+  tabla_resultado(
+    titulo = "Tasa desconocida: Newton y tidyactuarial",
+    align = c("l", "r", "r")
+  )
+```
+
+La solución analítica-numérica y `irr_flow()` dan una tasa cercana a $5.9143\%$. El VPN residual, cercano a cero, confirma que la tasa satisface la ecuación de valor con la precisión numérica usada.
+
+## Cuando una ecuación admite varias tasas
+
+La unicidad anterior depende de la estructura del flujo. Cuando los signos cambian varias veces, la función de valor puede dejar de ser monótona y una misma corriente puede admitir más de una tasa que haga cero su valor presente.
+
+Esto es importante porque muestra que la expresión **“la TIR”** no siempre identifica una cantidad única.
+
+::: {.callout-tip title="Ejemplo. Dos tasas que satisfacen la misma ecuación de valor" icon=false}
+Paola revisa otro contrato que le ofrecen a la aseguradora. Exige una inversión inicial de COP 100 millones; al finalizar el primer año la aseguradora recibe COP 230 millones, pero al finalizar el segundo debe pagar COP 132 millones por garantías y cierre contractual.
+
+En millones de pesos, el flujo es
+
+$$
+(-100,\ 230,\ -132).
+$$
+
+La ecuación de valor es
+
+$$
+-100
++
+\frac{230}{1+i}
+-
+\frac{132}{(1+i)^2}
+=
+0.
+$$
+
+Multiplicando por $(1+i)^2$,
+
+$$
+-100(1+i)^2+230(1+i)-132=0.
+$$
+
+Después de simplificar,
+
+$$
+100i^2-30i+2=0.
+$$
+
+Entonces,
+
+$$
+i
+=
+\frac{30\pm\sqrt{30^2-4(100)(2)}}{200},
+$$
+
+de donde
+
+$$
+\boxed{i_1=10\%,\qquad i_2=20\%.}
+$$
+
+Ambas tasas hacen cero el valor presente del mismo flujo.
+
+```{r}
+#| label: flujo-tir-multiple-grafico
+
+flujo_contrato <- tibble(
+  t = 0:2,
+  C = c(-100, 230, -132) * 1e6
+)
+
+flujo_contrato |>
+  plot_cash_flow(
+    C = C,                                              # monto de cada flujo
+    t = t,                                              # tiempo, en años
+    title = "Flujo del contrato",                       # título
+    subtitle = "Ecuación de valor con dos soluciones",  # subtítulo
+    currency = "COP ",                                  # prefijo de moneda
+    label_format = "compact"                            # formato de etiquetas
+  )
+```
+
+La corriente presenta dos cambios de signo:
+
+$$
+-\quad+\quad-.
+$$
+
+Esto nos advierte que ya no podemos suponer la monotonía del caso convencional. En efecto, el VPN es positivo para tasas entre $10\%$ y $20\%$ y negativo fuera de ese intervalo.
+
+En esta situación, comparar mecánicamente una única TIR con una tasa mínima aceptable puede llevar a una interpretación equivocada. Primero hay que estudiar la ecuación de valor y la estructura del flujo.
+
+Para Paola, la consecuencia es concreta. Si la tasa de oportunidad de la aseguradora es del $8\%$, las dos TIR la superan y la regla «aceptar si la TIR es mayor que la tasa de oportunidad» aprobaría el contrato. Sin embargo, a esa tasa
+
+$$
+-100+\frac{230}{1.08}-\frac{132}{(1.08)^2}\approx-0.21,
+$$
+
+así que el contrato destruye valor: en pesos de hoy, unos COP 206 000. Con una tasa de oportunidad del $15\%$, en cambio, el VPN es positivo. Aquí la decisión tiene que tomarse con el VPN, no con la TIR.
+:::
+
+::: {.callout-note title="Función tidyactuarial: irr_flow_multi()" icon=false}
+Usamos `irr_flow_multi()` cuando una corriente de flujos puede admitir **más de una tasa interna de retorno**. La función explora un intervalo de tasas, evalúa el valor presente neto sobre una malla y refina los subintervalos donde detecta posibles raíces.
+
+Sus argumentos de uso más frecuente son:
+
+| Argumento | Significado |
+|:--|:--|
+| `cf` | Vector de flujos de caja, conservando sus signos. |
+| `t` | Fechas de los flujos expresadas numéricamente en años. |
+| `date` | Fechas calendario, utilizadas en lugar de `t`. |
+| `search_interval` | Intervalo de tasas dentro del cual se buscan posibles raíces. |
+| `grid_points` | Número de puntos utilizados para explorar numéricamente el intervalo. |
+
+La salida trae una fila por cada TIR detectada, con la tasa encontrada, el VPN residual y diagnósticos sobre la estructura de signos del flujo.
+
+La búsqueda es numérica y se hace sobre un intervalo finito, así que el resultado, por sí solo, no demuestra que hayamos encontrado todas las raíces de la ecuación de valor.
+:::
+
+```{r}
+#| label: auditoria-tir-multiple
+
+tir_contrato <- irr_flow_multi(
+  cf = flujo_contrato$C,         # flujos, con signo
+  t = flujo_contrato$t,          # tiempo, en años
+  search_interval = c(0, 0.50),  # intervalo de búsqueda de tasas
+  grid_points = 2000             # puntos de la malla de exploración
+)
+```
+
+```{r}
+#| label: tabla-auditoria-tir-multiple
+#| echo: false
+#| results: asis
+
+tir_contrato |>
+  transmute(
+    Raíz = root_id,
+    `TIR efectiva anual` =
+      paste0(formatC(100 * irr, digits = 4, format = "f"), "%"),
+    `VPN residual (COP)` =
+      formatC(npv, digits = 2, format = "f"),
+    `Cambios de signo` = n_sign_changes_cashflow
+  ) |>
+  tabla_resultado(
+    titulo = "Raíces detectadas por irr_flow_multi()",
+    digits = 0,
+    align = c("r", "r", "r", "r")
+  )
+```
+
+La función detecta las raíces del $10\%$ y del $20\%$, en concordancia con la resolución algebraica.
+
+::: {.callout-warning title="La búsqueda numérica no demuestra unicidad ni exhaustividad" icon=false}
+`irr_flow_multi()` explora un intervalo finito con procedimientos numéricos. Una raíz fuera de ese intervalo no se detecta, y seguimos necesitando la estructura matemática de la ecuación para interpretar los resultados.
+
+El número de cambios de signo de los flujos es una señal de posible multiplicidad, pero no demuestra por sí solo cuántas tasas admisibles hay.
+:::
+
+Los casos de monto, fecha y tasa desconocidos se resumen ahora en una misma estructura:
+
+$$
+\boxed{
+\text{construir la ecuación de valor}
+\;\longrightarrow\;
+\text{identificar la incógnita}
+\;\longrightarrow\;
+\text{estudiar su dominio}
+\;\longrightarrow\;
+\text{resolver}
+\;\longrightarrow\;
+\text{verificar}.
+}
+$$
+
+El software entra en las últimas etapas; la formulación financiera sigue siendo el punto de partida.
+
+
+## Ecuaciones de valor con fechas calendario
+
+Hasta ahora hemos representado las fechas con tiempos numéricos como $t=0$, $t=1$ o $t=3.5$. En muchas operaciones reales, sin embargo, los pagos se pactan con fechas calendario.
+
+La ecuación de valor conserva exactamente la misma estructura; lo que cambia es que hay que determinar la **fracción de año** del intervalo entre dos fechas.
+
+Una convención de conteo de días define cómo se hace esa conversión. Dos convenciones frecuentes son
+
+$$
+t_{\text{Act/365}}
+=
+\frac{\text{número real de días del intervalo}}{365}
+$$
+
+y
+
+$$
+t_{\text{Act/360}}
+=
+\frac{\text{número real de días del intervalo}}{360}.
+$$
+
+Por ejemplo, bajo Actual/365, un intervalo de 90 días equivale a
+
+$$
+\frac{90}{365}
+$$
+
+años para efectos de valoración.
+
+La convención de conteo de días hace parte de las condiciones financieras de la operación; no se escoge después de ver cuál da un resultado más conveniente.
+
+::: {.callout-tip title="Ejemplo. Ecuación de valor con fechas calendario" icon=false}
+La aseguradora donde trabaja Paola tiene por cobrar a una compañía reaseguradora tres pagos por siniestros ya liquidados:
+
+- COP 18 millones el 15 de marzo de 2027;
+- COP 32 millones el 30 de junio de 2027;
+- COP 24 millones el 20 de diciembre de 2027.
+
+La reaseguradora propone cancelar los tres con un único pago de COP 72 millones el 31 de mayo de 2027. Para responder, Paola usa la tasa de valoración acordada en el contrato de reaseguro, $8\%$ efectivo anual, con la convención Actual/365. Paola necesita:
+
+1. el valor de la corriente en la primera fecha;
+2. su valor acumulado en la última fecha;
+3. el pago único del 31 de mayo que sí sería equivalente a los tres pagos, para decidir si la propuesta conviene.
+
+**Análisis**
+
+La primera fecha,
+
+$$
+15\text{ de marzo de 2027},
+$$
+
+la usaremos inicialmente como fecha focal.
+
+Con fechas calendario, lo primero es contar los días. Desde el 15 de marzo quedan 16 días de marzo; a partir de ahí se suman los meses completos y los días del mes final:
+
+| Hasta | Conteo | Días |
+|:--|:--|--:|
+| 31 de mayo de 2027 | $16+30+31$ (marzo, abril, mayo) | 77 |
+| 30 de junio de 2027 | $16+30+31+30$ (marzo, abril, mayo, junio) | 107 |
+| 20 de diciembre de 2027 | $16+30+31+30+31+31+30+31+30+20$ | 280 |
+
+Con Actual/365, los tiempos medidos desde la primera fecha son
+
+$$
+0,
+\qquad
+\frac{107}{365},
+\qquad
+\frac{280}{365}.
+$$
+
+**Valor en la primera fecha**
+
+El primer pago ya está en la fecha focal; los otros dos hay que descontarlos:
+
+$$
+V_0
+=
+18\,000\,000
++
+32\,000\,000(1.08)^{-107/365}
++
+24\,000\,000(1.08)^{-280/365}.
+$$
+
+Así,
+
+$$
+\boxed{
+V_0
+=
+\text{COP }71\,910\,214.38.
+}
+$$
+
+**Valor en la última fecha**
+
+Para valorar la misma corriente el 20 de diciembre, el primer pago se acumula durante 280 días.
+
+Entre el 30 de junio y el 20 de diciembre transcurren 173 días. Por tanto,
+
+$$
+V_T
+=
+18\,000\,000(1.08)^{280/365}
++
+32\,000\,000(1.08)^{173/365}
++
+24\,000\,000.
+$$
+
+De aquí,
+
+$$
+\boxed{
+V_T
+=
+\text{COP }76\,283\,519.99.
+}
+$$
+
+Los dos resultados son la misma corriente financiera expresada en fechas distintas. De hecho, $V_T=V_0(1.08)^{280/365}$, como vimos en la sección de valoración de flujos.
+
+**El pago único propuesto**
+
+El 31 de mayo está 77 días después de la fecha focal. Llevando $V_0$ hasta esa fecha, el pago único equivalente a los tres originales es
+
+$$
+X
+=
+V_0(1.08)^{77/365}
+\approx
+\text{COP }73\,087\,250.17.
+$$
+
+La reaseguradora ofrece COP 72 millones, más de COP 1 millón por debajo del pago equivalente. Visto desde el 15 de marzo, los COP 72 millones valen
+
+$$
+72\,000\,000(1.08)^{-77/365}
+\approx
+\text{COP }70\,840\,473.86,
+$$
+
+menos que los COP 71 910 214.38 de la corriente original. La propuesta no conviene a la aseguradora: Paola debería pedir al menos COP 73 087 250.17 el 31 de mayo.
+
+```{r}
+#| label: flujo-fechas-calendario-grafico
+
+flujo_fechas <- tibble(
+  fecha = as.Date(
+    c(
+      "2027-03-15",
+      "2027-06-30",
+      "2027-12-20"
+    )
+  ),
+  C = c(18, 32, 24) * 1e6
+)
+
+flujo_fechas |>
+  plot_cash_flow(
+    C = C,                                  # monto de cada flujo
+    date = fecha,                           # fechas calendario de los flujos
+    i = 0.08,                               # tasa efectiva anual
+    day_count = "act/365",                  # convención de conteo de días
+    title = "Flujo con fechas calendario",  # título
+    currency = "COP ",                      # prefijo de moneda
+    label_format = "compact"                # formato de etiquetas
+  )
+```
+
+La gráfica conserva el espaciamiento real entre las fechas. Reemplazarlas a la carrera por $0$, $1$ y $2$ supondría intervalos iguales y describiría otra operación financiera.
+:::
+
+En R no hace falta contar los días a mano. Al restar dos objetos `Date`, R devuelve la diferencia en días; el paquete `lubridate` ofrece además funciones para leer fechas en distintos formatos y medir intervalos.
+
+```{r}
+#| label: dias-fechas-calendario
+
+fecha_inicial <- as.Date("2027-03-15")
+fechas_pago <- as.Date(c("2027-03-15", "2027-06-30", "2027-12-20"))
+
+# Con R base: restar fechas da la diferencia en días
+dias_base <- as.numeric(fechas_pago - fecha_inicial)
+
+# Con lubridate: ymd() lee la fecha, interval() arma el intervalo
+# y time_length() lo mide en la unidad pedida
+dias_lubridate <- lubridate::time_length(
+  lubridate::interval(lubridate::ymd("2027-03-15"), fechas_pago),
+  unit = "day"
+)
+
+dias_base        # 0, 107 y 280
+dias_lubridate   # el mismo conteo
+```
+
+Otras funciones útiles para este tipo de cálculos son `difftime()`, `seq()` con fechas, por ejemplo `seq(fecha_inicial, by = "month", length.out = 12)`, y `lubridate::days_in_month()`.
+
+La resolución analítica puede auditarse directamente con `pv_flow()` y `fv_flow()`.
+
+```{r}
+#| label: auditoria-fechas-calendario
+
+vp_fechas_analitico <- 18e6 +
+  32e6 / 1.08^(107 / 365) +
+  24e6 / 1.08^(280 / 365)
+
+vf_fechas_analitico <- 18e6 * 1.08^(280 / 365) +
+  32e6 * 1.08^(173 / 365) +
+  24e6
+
+vp_fechas_tidy <- pv_flow(
+  cf = flujo_fechas$C,        # flujos, con signo
+  i = 0.08,                   # tasa efectiva anual
+  date = flujo_fechas$fecha,  # fechas calendario de los flujos
+  day_count = "act/365"       # convención de conteo de días
+)
+
+vf_fechas_tidy <- fv_flow(
+  cf = flujo_fechas$C,        # flujos, con signo
+  i = 0.08,                   # tasa efectiva anual
+  date = flujo_fechas$fecha,  # fechas calendario de los flujos
+  day_count = "act/365"       # convención de conteo de días
+)
+
+pago_equivalente_tidy <- future_value(
+  C = vp_fechas_tidy,         # valor de la corriente el 15 de marzo
+  i = 0.08,                   # tasa efectiva anual
+  t = 77 / 365                # del 15 de marzo al 31 de mayo
+)
+```
+
+```{r}
+#| label: tabla-auditoria-fechas-calendario
+#| echo: false
+#| results: asis
+
+tibble(
+  magnitud = c(
+    "Valor en la primera fecha",
+    "Valor en la última fecha",
+    "Pago equivalente el 31 de mayo"
+  ),
+  analitico = c(
+    vp_fechas_analitico,
+    vf_fechas_analitico,
+    vp_fechas_analitico * 1.08^(77 / 365)
+  ),
+  tidyactuarial = c(
+    vp_fechas_tidy,
+    vf_fechas_tidy,
+    pago_equivalente_tidy
+  )
+) |>
+  tabla_comparacion(
+    titulo = "Fechas calendario: comparación de valores equivalentes",
+    digits = 2
+  )
+```
+
+Cuando `pv_flow()` o `fv_flow()` reciben fechas mediante `date`, la fecha más temprana que se suministra funciona como origen temporal. Por eso, si queremos valorar la corriente en una fecha anterior al primer pago, hay que incorporar esa fecha explícitamente con un flujo igual a cero.
+
+::: {.callout-warning title="Fechas calendario y ley financiera" icon=false}
+Una convención de conteo de días determina la fracción de año de cada intervalo; no determina por sí misma la tasa de interés.
+
+La tasa, su convención y el conteo de días se usan juntos y de forma consistente. Cambiar Actual/365 por Actual/360 modifica los exponentes y, con ellos, la ecuación de valor.
+:::
+
+## Compatibilidad entre tasas y unidades de tiempo
+
+Las ecuaciones de valor exigen que la tasa y la medición del tiempo estén en unidades compatibles.
+
+Si una tasa nominal anual de interés $i^{(m)}$ es convertible $m$ veces al año, la tasa efectiva correspondiente a cada subperiodo de conversión es
+
+$$
+\boxed{
+j_m=\frac{i^{(m)}}{m}.
+}
+$$
+
+Por ejemplo, para una tasa nominal anual del $12\%$ convertible mensualmente,
+
+$$
+j_{12}
+=
+\frac{0.12}{12}
+=
+0.01.
+$$
+
+La tasa efectiva mensual es, por tanto, del $1\%$.
+
+Si los exponentes están en meses, usamos esa tasa mensual. También podemos dejar los tiempos en años y emplear una función que interprete bien la tasa nominal y su frecuencia de conversión.
+
+Lo que no podemos hacer es combinar, por ejemplo, una tasa mensual con un exponente medido directamente en años sin hacer la conversión.
+
+::: {.callout-tip title="Ejemplo. Tasa nominal y unidad de tiempo" icon=false}
+Paola debe pagar 1 000 en el mes 6 y 1 800 en el mes 18, y ambas obligaciones se sustituirán por un único pago $X$ en el mes 12.
+
+La tasa nominal anual de interés es del $12\%$, convertible mensualmente.
+
+**Análisis**
+
+La tasa efectiva mensual es
+
+$$
+j_{12}
+=
+\frac{0.12}{12}
+=
+0.01.
+$$
+
+Elegimos el mes 12 como fecha focal.
+
+El primer pago está seis meses antes de la fecha focal y se acumula durante seis periodos mensuales; el segundo está seis meses después y se descuenta durante el mismo número de periodos.
+
+**Ecuación de valor**
+
+Así,
+
+$$
+X
+=
+1\,000(1.01)^6
++
+1\,800(1.01)^{-6}.
+$$
+
+De aquí,
+
+$$
+\boxed{
+X=2\,757.20.
+}
+$$
+
+```{r}
+#| label: flujo-obligaciones-meses
+
+plot_cash_flow(
+  C = c(1000, 1800),                                    # monto de cada flujo
+  t = c(6, 18) / 12,                                    # tiempos, en años
+  title = "Obligaciones expresadas en meses",           # título
+  subtitle = "El pago sustituto se ubica en el mes 12"  # subtítulo
+)
+```
+:::
+
+En `tidyactuarial`, la tasa puede suministrarse directamente como nominal mediante
+
+```r
+i_type = "nominal_interest"
+```
+
+y su frecuencia de conversión mediante `m`.
+
+Como la fecha focal queda seis meses después del primer pago y seis meses antes del segundo, la auditoría puede reproducir directamente los dos movimientos financieros.
+
+```{r}
+#| label: auditoria-tasa-nominal
+
+x_nominal_analitico <- 1000 * 1.01^6 +
+  1800 / 1.01^6
+
+x_nominal_tidy <- future_value(
+  C = 1000,                       # monto de cada flujo
+  i = 0.12,                       # tasa nominal anual
+  i_type = "nominal_interest",    # tipo de tasa
+  m = 12,                         # frecuencia de conversión por año
+  t = 6 / 12                      # plazo, en años (meses / 12)
+) +
+  present_value(
+    C = 1800,                     # monto de cada flujo
+    i = 0.12,                     # tasa nominal anual
+    i_type = "nominal_interest",  # tipo de tasa
+    m = 12,                       # frecuencia de conversión por año
+    t = 6 / 12                    # plazo, en años (meses / 12)
+  )
+```
+
+```{r}
+#| label: tabla-auditoria-tasa-nominal
+#| echo: false
+#| results: asis
+
+tibble(
+  magnitud = "Pago sustituto en el mes 12",
+  analitico = x_nominal_analitico,
+  tidyactuarial = x_nominal_tidy
+) |>
+  tabla_comparacion(
+    titulo = "Tasa nominal: pago sustituto",
+    digits = 2
+  )
+```
+
+La equivalencia entre ambas expresiones puede verse directamente:
+
+$$
+\left(
+1+\frac{0.12}{12}
+\right)^6
+=
+(1.01)^6.
+$$
+
+El argumento `m=12` describe la **frecuencia de conversión de la tasa nominal**. Ojo: no significa que haya 12 pagos ni determina la fecha focal.
+
+::: {.callout-warning title="No confundir tres frecuencias diferentes" icon=false}
+En un problema pueden coexistir:
+
+- la frecuencia de conversión de una tasa nominal;
+- la frecuencia con la que se realizan los pagos;
+- la unidad utilizada para medir el tiempo.
+
+Estas cantidades pueden coincidir, pero conceptualmente son diferentes, y la ecuación de valor debe respetar la convención que corresponde a cada una.
+:::
+
+## Tasas que cambian por intervalos
+
+Una ecuación de valor no necesita una tasa constante durante toda la operación.
+
+Si la tasa cambia con el tiempo, cada flujo se traslada con los factores de los intervalos que atraviesa. Aplicar una tasa promedio sin que el modelo financiero lo justifique puede producir una ecuación de valor distinta de la operación original.
+
+Supongamos que durante el intervalo
+
+$$
+(k-1,k]
+$$
+
+rige una tasa efectiva $i_k$.
+
+Tomando
+
+$$
+a(0)=1,
+$$
+
+la función de acumulación en las fechas enteras queda determinada por
+
+$$
+\boxed{
+a(n)
+=
+\prod_{k=1}^{n}(1+i_k).
+}
+$$
+
+Por ejemplo,
+
+$$
+a(2)
+=
+(1+i_1)(1+i_2).
+$$
+
+Entre dos fechas enteras $r<s$,
+
+$$
+a(r,s)
+=
+\frac{a(s)}{a(r)}
+=
+\prod_{k=r+1}^{s}(1+i_k).
+$$
+
+El factor de descuento correspondiente es
+
+$$
+v(r,s)
+=
+\frac{1}{a(r,s)}.
+$$
+
+Esta construcción continúa satisfaciendo la propiedad de composición:
+
+$$
+a(r,s)a(s,t)=a(r,t).
+$$
+
+Entonces, aunque las tasas sean distintas en cada intervalo, los factores siguen perteneciendo a una **misma ley financiera coherente** y se conserva la independencia de la fecha focal.
+
+::: {.callout-tip title="Ejemplo integrador. Fondo con tasas variables" icon=false}
+Una asociación de profesionales constituye un fondo de inversión: en $t=0$ deposita una cantidad $Q$ y exactamente un año después aporta $1.5Q$.
+
+Durante el primer año el fondo reconoce una tasa efectiva anual $i$, y durante el segundo, una tasa efectiva anual igual a $1.8i$.
+
+Se conocen además dos condiciones:
+
+- el valor equivalente de los aportes en $t=0$ es COP 24 millones;
+- el saldo acumulado al finalizar el segundo año es COP 29.4 millones.
+
+Se desea determinar $i$ y $Q$. Los cálculos se realizarán en millones de pesos.
+
+**Primera condición: valor equivalente en $t=0$**
+
+El aporte $Q$ ya se encuentra en la fecha focal.
+
+El aporte $1.5Q$, hecho en $t=1$, se descuenta con la tasa del primer intervalo. Entonces,
+
+$$
+Q+\frac{1.5Q}{1+i}=24.
+\tag{1}
+$$
+
+**Segunda condición: saldo acumulado en $t=2$**
+
+El aporte $Q$ realizado en $t=0$ atraviesa ambos intervalos. Su valor en $t=2$ es
+
+$$
+Q(1+i)(1+1.8i).
+$$
+
+El aporte $1.5Q$ hecho en $t=1$ atraviesa solamente el segundo intervalo y se acumula hasta
+
+$$
+1.5Q(1+1.8i).
+$$
+
+Es decir,
+
+$$
+Q(1+i)(1+1.8i)
++
+1.5Q(1+1.8i)
+=
+29.4.
+\tag{2}
+$$
+
+Las ecuaciones (1) y (2) forman un sistema no lineal, pero su estructura nos permite simplificarlo antes de recurrir a un algoritmo numérico.
+
+Multiplicando (1) por $1+i$,
+
+$$
+Q(1+i)+1.5Q
+=
+24(1+i).
+$$
+
+Por otra parte, (2) puede factorizarse:
+
+$$
+(1+1.8i)
+\left[
+Q(1+i)+1.5Q
+\right]
+=
+29.4.
+$$
+
+Sustituyendo la relación anterior,
+
+$$
+24(1+i)(1+1.8i)=29.4.
+$$
+
+Al desarrollar,
+
+$$
+1.8i^2+2.8i-0.225=0.
+$$
+
+Las raíces son
+
+$$
+i
+=
+\frac{-2.8\pm\sqrt{9.46}}{3.6}.
+$$
+
+Numéricamente,
+
+$$
+i_1\approx0.0766,
+\qquad
+i_2\approx-1.6321.
+$$
+
+La segunda raíz no es admisible en el modelo porque
+
+$$
+1+i_2<0.
+$$
+
+De aquí,
+
+$$
+\boxed{i\approx7.6586\%}.
+$$
+
+Durante el segundo año, la tasa es
+
+$$
+1.8i
+\approx
+0.1379,
+$$
+
+es decir,
+
+$$
+\boxed{1.8i\approx13.7856\%}.
+$$
+
+Finalmente, sustituyendo $i$ en (1),
+
+$$
+Q
+=
+\frac{24}
+{1+\dfrac{1.5}{1+i}}
+\approx
+10.03.
+$$
+
+Así,
+
+$$
+\boxed{
+Q\approx\text{COP }10.03\text{ millones}
+}
+$$
+
+y el segundo aporte es aproximadamente
+
+$$
+\boxed{
+1.5Q\approx\text{COP }15.04\text{ millones}.
+}
+$$
+
+Si al finalizar el segundo año la asociación retira el saldo completo, los flujos desde su perspectiva son dos aportes negativos y un retiro positivo:
+
+```{r}
+#| label: flujo-tasas-variables-grafico
+
+i_analitico <- (-2.8 + sqrt(9.46)) / 3.6
+
+Q_analitico <- 24 /
+  (1 + 1.5 / (1 + i_analitico))
+
+tibble(
+  t = 0:2,
+  C = c(
+    -Q_analitico,
+    -1.5 * Q_analitico,
+    29.4
+  )
+) |>
+  plot_cash_flow(
+    C = C,                                              # monto de cada flujo
+    t = t,                                              # tiempo, en años
+    title = "Aportes y valor acumulado del fondo",      # título
+    subtitle = "Flujos expresados en millones de COP",  # subtítulo
+    amount_label = "Millones de COP",                   # etiqueta del eje y
+    label_digits = 2                                    # decimales mostrados
+  )
+```
+
+El diagrama nos deja ver qué intervalos atraviesa cada aporte y, por tanto, qué factores se aplican.
+:::
+
+Para auditar el resultado podemos definir explícitamente la función de acumulación del fondo:
+
+$$
+a(t)
+=
+\begin{cases}
+(1+i)^t,
+&0\leq t\leq1,\\[4pt]
+(1+i)(1+1.8i)^{t-1},
+&1<t\leq2.
+\end{cases}
+$$
+
+La función es continua en $t=1$ y representa, dentro de una misma ley financiera, los dos regímenes de tasa.
+
+`accumulation_factor()`, que vimos en el capítulo anterior, puede usar una función de acumulación suministrada con el argumento `a` para calcular
+
+$$
+a(s,t)=\frac{a(t)}{a(s)}.
+$$
+
+```{r}
+#| label: auditoria-tasas-variables
+
+a_fondo <- function(t) {
+  ifelse(
+    t <= 1,
+    (1 + i_analitico)^t,
+    (1 + i_analitico) *
+      (1 + 1.8 * i_analitico)^(t - 1)
+  )
+}
+
+factor_01 <- accumulation_factor(
+  s = 0,       # fecha inicial, en años
+  t = 1,       # tiempo, en años
+  a = a_fondo  # función de acumulación suministrada
+)
+
+factor_12 <- accumulation_factor(
+  s = 1,       # fecha inicial, en años
+  t = 2,       # tiempo, en años
+  a = a_fondo  # función de acumulación suministrada
+)
+
+valor_t0 <- Q_analitico +
+  1.5 * Q_analitico / factor_01
+
+valor_t2 <- Q_analitico *
+  factor_01 *
+  factor_12 +
+  1.5 * Q_analitico *
+  factor_12
+```
+
+```{r}
+#| label: tabla-auditoria-tasas-variables
+#| echo: false
+#| results: asis
+
+tibble(
+  magnitud = c(
+    "Valor equivalente en t = 0",
+    "Saldo acumulado en t = 2"
+  ),
+  analitico = c(24, 29.4),
+  tidyactuarial = c(
+    valor_t0,
+    valor_t2
+  )
+) |>
+  tabla_comparacion(
+    titulo = "Fondo con tasas variables: comprobación de las condiciones",
+    digits = 2
+  )
+```
+
+La auditoría debe recuperar simultáneamente las dos condiciones originales:
+
+$$
+V(0)=24
+$$
+
+y
+
+$$
+V(2)=29.4.
+$$
+
+Además, como el valor equivalente en $t=0$ se puede trasladar al final del segundo año con el factor total
+
+$$
+a(0,2)
+=
+(1+i)(1+1.8i),
+$$
+
+se obtiene
+
+$$
+24(1+i)(1+1.8i)=29.4.
+$$
+
+Esta igualdad hace patente que **la independencia de la fecha focal no exige una tasa constante**: basta con que los factores con que trasladamos los flujos pertenezcan a una misma ley financiera coherente.
+
+
+## Ecuaciones de valor con varias restricciones
+
+Hasta aquí cada problema ha estado determinado, en esencia, por una condición de equivalencia. Pero una operación puede estar sujeta a **varias condiciones financieras que deben cumplirse al mismo tiempo**.
+
+Si hay varias incógnitas, una sola ecuación de valor puede no bastar. Cada restricción independiente aporta una ecuación adicional y el problema se convierte en un sistema.
+
+Tampoco la fecha focal tiene que ser la misma para todas las restricciones: cada condición se puede formular en la fecha en que debe cumplirse, siempre que los flujos se trasladen bien.
+
+::: {.callout-tip title="Ejemplo. Metas financieras simultáneas" icon=false}
+Paola planea comprar una vivienda dentro de tres años. Para la cuota inicial y los gastos de compra necesitará COP 120 millones al finalizar el tercer año.
+
+Además, la entidad financiera le exige **acreditar un saldo de ahorro de COP 65 millones al finalizar el segundo año**. Acreditarlo no implica retirar los recursos: después de demostrar el saldo, estos siguen invertidos y disponibles para la meta del tercer año.
+
+Paola cuenta con las siguientes inversiones:
+
+| Inversión | Fecha de disponibilidad | Valor esperado |
+|:--|:--:|--:|
+| CDT | $t=1$ | COP 25 millones |
+| Fondo de inversión | $t=2$ | COP 23 millones |
+| Bono corporativo | $t=3$ | COP 49.8 millones |
+
+Una vez disponibles, los recursos de estas inversiones se pueden reinvertir a una tasa efectiva anual de planeación del $8\%$.
+
+Para completar las dos metas, Paola realizará además:
+
+- un aporte de $X$ millones en $t=1$, colocado en un producto que reconoce una tasa efectiva anual del $7\%$;
+- un aporte de $Y$ millones en $t=2$, colocado en otro producto que reconoce una tasa efectiva anual del $9\%$.
+
+Se desea determinar $X$ y $Y$.
+
+**Primera restricción: saldo acreditado en $t=2$**
+
+En $t=2$, el CDT de COP 25 millones habrá permanecido invertido durante un año al $8\%$:
+
+$$
+25(1.08).
+$$
+
+El fondo de COP 23 millones ya se encuentra disponible en esa fecha.
+
+El aporte $X$ habrá permanecido durante un año en el producto que reconoce el $7\%$:
+
+$$
+X(1.07).
+$$
+
+Por último, el aporte $Y$ se hace exactamente en $t=2$, así que su valor en esa fecha es simplemente $Y$.
+
+La primera condición es
+
+$$
+25(1.08)
++
+23
++
+X(1.07)
++
+Y
+=
+65.
+$$
+
+Como
+
+$$
+25(1.08)+23=50,
+$$
+
+se obtiene
+
+$$
+\boxed{
+1.07X+Y=15.
+}
+\tag{3}
+$$
+
+**Segunda restricción: recursos disponibles en $t=3$**
+
+Los recursos existentes evolucionan hasta $t=3$ de acuerdo con sus condiciones:
+
+$$
+25(1.08)^2
++
+23(1.08)
++
+49.8.
+$$
+
+El aporte $X$, realizado en $t=1$, permanece durante dos años en el producto al $7\%$:
+
+$$
+X(1.07)^2.
+$$
+
+El aporte $Y$, realizado en $t=2$, permanece durante un año en el producto al $9\%$:
+
+$$
+Y(1.09).
+$$
+
+Así, la segunda condición es
+
+$$
+25(1.08)^2
++
+23(1.08)
++
+49.8
++
+X(1.07)^2
++
+Y(1.09)
+=
+120.
+$$
+
+Los recursos existentes acumulan
+
+$$
+25(1.08)^2
++
+23(1.08)
++
+49.8
+=
+103.8.
+$$
+
+Luego,
+
+$$
+\boxed{
+1.1449X+1.09Y=16.2.
+}
+\tag{4}
+$$
+
+**Resolución del sistema**
+
+Las ecuaciones son
+
+$$
+1.07X+Y=15
+$$
+
+y
+
+$$
+1.1449X+1.09Y=16.2.
+$$
+
+Multiplicando la primera por $1.09$,
+
+$$
+1.1663X+1.09Y=16.35.
+$$
+
+Al restar la segunda ecuación,
+
+$$
+(1.1663-1.1449)X
+=
+16.35-16.2,
+$$
+
+de modo que
+
+$$
+0.0214X=0.15.
+$$
+
+Entonces,
+
+$$
+X
+=
+\frac{0.15}{0.0214}
+\approx
+7.01.
+$$
+
+Sustituyendo en la primera ecuación,
+
+$$
+Y
+=
+15-1.07X
+=
+7.50.
+$$
+
+Así,
+
+$$
+\boxed{
+X\approx\text{COP }7.01\text{ millones}
+}
+$$
+
+y
+
+$$
+\boxed{
+Y=\text{COP }7.50\text{ millones}.
+}
+$$
+
+Ambas cantidades son positivas y representan aportes adicionales que Paola tiene que hacer.
+
+Una solución negativa no sería necesariamente un error algebraico. Según la interpretación contractual, podría indicar que los recursos existentes superan la necesidad de financiación y permiten retirar o reasignar una cantidad en esa fecha.
+:::
+
+### Varias tasas no significan una ley financiera inconsistente
+
+En el ejemplo intervienen tres tasas:
+
+- $8\%$ para la reinversión de los recursos existentes;
+- $7\%$ para el producto asociado al aporte $X$;
+- $9\%$ para el producto asociado al aporte $Y$.
+
+Esto es distinto de aplicar tasas diferentes, sin justificación, al **mismo capital** durante un mismo intervalo.
+
+Aquí hay posiciones financieras diferentes, cada una sometida a sus propias condiciones contractuales. En una fecha focal dada, el saldo total es la suma del valor que cada posición alcanza bajo su propia ley financiera.
+
+Por ejemplo, en $t=3$,
+
+$$
+V(3)
+=
+V_{\text{recursos existentes}}(3)
++
+V_X(3)
++
+V_Y(3).
+$$
+
+No hay contradicción con el resultado de independencia de la fecha focal que vimos al comienzo del capítulo. Ese resultado se aplica cuando un mismo conjunto de flujos se traslada con una ley financiera común; en este ejemplo, el sistema agrega **posiciones distintas**, cada una valorada según el contrato que le corresponde.
+
+### Verificación con `tidyactuarial`
+
+Podemos comprobar la solución valorando por separado los recursos de cada posición.
+
+```{r}
+#| label: auditoria-varias-restricciones
+
+X_analitico <- 0.15 / 0.0214
+Y_analitico <- 15 - 1.07 * X_analitico
+
+existentes_t2 <- future_value(
+  C = c(25, 23),                    # monto de cada flujo
+  i = 0.08,                         # tasa efectiva anual
+  t = c(1, 0)                       # tiempos, en años
+) |>
+  sum()
+
+aportes_t2 <- future_value(
+  C = c(X_analitico, Y_analitico),  # monto de cada flujo
+  i = c(0.07, 0.09),                # una tasa por flujo
+  t = c(1, 0)                       # tiempos, en años
+) |>
+  sum()
+
+existentes_t3 <- future_value(
+  C = c(25, 23, 49.8),              # monto de cada flujo
+  i = 0.08,                         # tasa efectiva anual
+  t = c(2, 1, 0)                    # tiempos, en años
+) |>
+  sum()
+
+aportes_t3 <- future_value(
+  C = c(X_analitico, Y_analitico),  # monto de cada flujo
+  i = c(0.07, 0.09),                # una tasa por flujo
+  t = c(2, 1)                       # tiempos, en años
+) |>
+  sum()
+```
+
+En $t=2$ debe recuperarse la meta de COP 65 millones y en $t=3$ la de COP 120 millones.
+
+```{r}
+#| label: tabla-auditoria-varias-restricciones
+#| echo: false
+#| results: asis
+
+tibble(
+  fecha_focal = c("t = 2", "t = 3"),
+  meta = c(65, 120),
+  valor_calculado = c(
+    existentes_t2 + aportes_t2,
+    existentes_t3 + aportes_t3
+  )
+) |>
+  mutate(
+    diferencia = valor_calculado - meta,
+    across(where(is.numeric), \(x) round(x, 6))
+  ) |>
+  tabla_resultado(
+    titulo = "Comprobación de las metas en cada fecha focal",
+    digits = 2,
+    align = c("l", "r", "r", "r")
+  )
+```
+
+Las dos diferencias deben ser numéricamente cercanas a cero.
+
+En este problema no usamos `solve_value()`: hay dos incógnitas simultáneas y las dos restricciones forman un **sistema lineal**. La resolución matemática del sistema va primero; la auditoría computacional, después.
+
+## Sensibilidad del valor a la tasa
+
+La tasa no solo puede ser la incógnita. Aunque la conozcamos, conviene entender cómo cambia el valor de una corriente cuando cambia la tasa con que se valora.
+
+Considérese
+
+$$
+V(i)
+=
+\sum_{j=1}^{n}
+C_j(1+i)^{-t_j}.
+$$
+
+Derivando respecto de $i$,
+
+$$
+\boxed{
+V'(i)
+=
+-
+\sum_{j=1}^{n}
+t_jC_j(1+i)^{-t_j-1}.
+}
+$$
+
+Si
+
+$$
+C_j\geq0
+$$
+
+para todos los pagos y existe al menos un flujo positivo en alguna fecha $t_j>0$, entonces, para $i>-1$,
+
+$$
+V'(i)<0.
+$$
+
+Entonces, el valor presente de una corriente formada únicamente por pagos futuros no negativos es una función estrictamente decreciente de la tasa.
+
+Esta propiedad proporciona una interpretación financiera directa:
+
+$$
+\boxed{
+\text{mayor tasa de descuento}
+\quad\Longrightarrow\quad
+\text{menor valor presente}.
+}
+$$
+
+Esta conclusión no se traslada automáticamente a corrientes con cambios de signo, porque ahí los distintos términos de $V'(i)$ pueden actuar en sentidos opuestos.
+
+::: {.callout-tip title="Ejemplo. Sensibilidad del valor a la tasa" icon=false}
+Considere dos pagos:
+
+- 1 000 en $t=2$;
+- 2 500 en $t=5$.
+
+Su valor presente a una tasa efectiva anual $i$ es
+
+$$
+V(i)
+=
+\frac{1\,000}{(1+i)^2}
++
+\frac{2\,500}{(1+i)^5}.
+$$
+
+Derivando,
+
+$$
+V'(i)
+=
+-\frac{2\,000}{(1+i)^3}
+-
+\frac{12\,500}{(1+i)^6}.
+$$
+
+Para toda tasa $i>-1$,
+
+$$
+V'(i)<0.
+$$
+
+Así, antes de calcular cualquier valor numérico ya sabemos que $V(i)$ debe disminuir a medida que aumenta la tasa.
+
+Podemos evaluar, por ejemplo, tasas entre el $3\%$ y el $8\%$.
+
+```{r}
+#| label: auditoria-sensibilidad
+
+sensibilidad <- tibble(
+  tasa = seq(0.03, 0.08, by = 0.01)
+) |>
+  rowwise() |>              # evalúa pv_flow() fila por fila
+  mutate(
+    valor_tidyactuarial = pv_flow(
+      cf = c(1000, 2500),  # flujos, con signo
+      i = tasa,            # tasa de valoración
+      t = c(2, 5)          # tiempos, en años
+    ),
+    valor_analitico =
+      1000 / (1 + tasa)^2 +
+      2500 / (1 + tasa)^5
+  ) |>
+  ungroup() |>              # se deshace el agrupamiento por filas
+  mutate(
+    diferencia =
+      valor_tidyactuarial -
+      valor_analitico
+  )
+```
+
+```{r}
+#| label: tabla-auditoria-sensibilidad
+#| echo: false
+#| results: asis
+
+sensibilidad |>
+  transmute(
+    magnitud =
+      paste0(
+        "Tasa ",
+        round(100 * tasa),
+        "%"
+      ),
+    analitico = valor_analitico,
+    tidyactuarial = valor_tidyactuarial
+  ) |>
+  tabla_comparacion(
+    titulo = "Sensibilidad del valor presente a la tasa",
+    digits = 2
+  )
+```
+
+La auditoría comprueba dos cosas: que `pv_flow()` reproduce la expresión analítica y que los valores presentes disminuyen cuando aumenta la tasa.
+:::
+
+La relación puede representarse gráficamente:
+
+```{r}
+#| label: sensibilidad-tasa-grafico
+
+sensibilidad |>
+  ggplot(aes(x = tasa, y = valor_tidyactuarial)) +
+  geom_line(linewidth = 0.8, color = "#1F4E79") +
+  geom_point(size = 2, color = "#1F4E79") +
+  scale_x_continuous(labels = scales::label_percent(accuracy = 1)) +
+  labs(
+    title = "Valor presente según la tasa de descuento",
+    x = "Tasa efectiva anual", y = "Valor presente"
+  ) +
+  theme_minimal()
+```
+
+Ojo: aunque en este rango parezca una recta, la curva no es lineal, sino convexa. Un cambio de un punto porcentual en la tasa no produce una disminución constante en unidades monetarias: al pasar del $3\%$ al $4\%$ el valor cae $119.75$, y al pasar del $7\%$ al $8\%$ cae $97.10$.
+
+Además, el plazo interviene en la sensibilidad. Para un único pago $C$ ubicado en $t$,
+
+$$
+V(i)=C(1+i)^{-t},
+$$
+
+y
+
+$$
+V'(i)
+=
+-tC(1+i)^{-t-1}.
+$$
+
+El factor $t$ muestra que la ubicación temporal del flujo participa directamente en su sensibilidad a la tasa. En términos relativos,
+
+$$
+\frac{V'(i)}{V(i)}
+=
+-\frac{t}{1+i}.
+$$
+
+Es decir, con todo lo demás constante, los pagos más lejanos son proporcionalmente más sensibles a cambios en la tasa.
+
+Esta idea la desarrollaremos formalmente más adelante con la **duración y la convexidad**, donde la sensibilidad de una corriente completa de pagos se vuelve una herramienta central para medir el riesgo de tasa de interés.
+
+
+## Errores frecuentes
+
+Los errores más importantes en una ecuación de valor suelen aparecer **antes** de empezar el despeje algebraico. Una ecuación perfectamente resuelta puede dar una respuesta incorrecta si los flujos, las fechas o la ley financiera se interpretaron mal.
+
+::: {.callout-warning title="Errores que deben evitarse" icon=false}
+1. **No definir correctamente el eje temporal.** Hay que establecer el origen, la unidad de tiempo y, cuando se usan fechas calendario, la convención de conteo de días. En las funciones que reciben `date`, también hay que identificar qué fecha actúa como origen de la valoración.
+
+2. **Mezclar perspectivas al asignar los signos.** Un pago no es positivo o negativo por naturaleza. Su signo depende de la parte desde cuya perspectiva se modela la operación.
+
+3. **Comparar directamente cantidades ubicadas en fechas distintas.** Los montos nominales no se suman ni se comparan sin considerar su ubicación temporal: todos los términos de una ecuación de valor se expresan en una fecha común.
+
+4. **Tratar incorrectamente la fecha focal.** Una vez elegida la fecha focal, tanto los flujos conocidos como las incógnitas se trasladan hasta ella. Con una ley financiera coherente se puede elegir otra fecha focal, pero la ecuación completa debe trasladarse de manera consistente.
+
+5. **Aplicar una tasa al intervalo equivocado.** Cuando hay tasas variables o productos financieros diferentes, cada tasa se aplica únicamente al capital y al intervalo que le corresponden.
+
+6. **Confundir tasa nominal, tasa periódica y frecuencia de pagos.** Si $i^{(m)}$ es una tasa nominal anual convertible $m$ veces, la tasa efectiva por periodo de conversión es
+
+   $$
+   j_m=\frac{i^{(m)}}{m}.
+   $$
+
+   La frecuencia de conversión no determina por sí misma la frecuencia de los pagos ni la fecha focal.
+
+7. **Construir factores incompatibles con una misma ley financiera.** En particular, con interés simple no se debe suponer que los factores locales $1+i(t-s)$ cumplen automáticamente la propiedad de composición. Si se parte de una función común $a(t)$, los factores coherentes se obtienen mediante
+
+   $$
+   a(s,t)=\frac{a(t)}{a(s)}.
+   $$
+
+8. **Usar un método numérico antes de estudiar la ecuación.** Siempre que se pueda, primero se analizan el dominio, la continuidad, la monotonía y un intervalo razonable para la solución. El intervalo que se le da a un algoritmo no se elige solo por ensayo computacional.
+
+9. **Suponer que toda raíz algebraica o numérica es financieramente admisible.** Una solución puede violar restricciones del contrato, producir factores financieros no admisibles o corresponder a una variable que debe ser entera. Y en flujos con varios cambios de signo tampoco se puede suponer que la TIR sea única.
+
+10. **Redondear demasiado pronto.** Los cálculos intermedios deben conservar suficiente precisión; el redondeo va al presentar el resultado o cuando la naturaleza contractual de la variable lo exige.
+
+11. **Confundir precisión numérica con exactitud conceptual.** Un residuo muy pequeño confirma que un número satisface la ecuación programada, pero no demuestra que esa ecuación represente bien el problema financiero.
+
+12. **Considerar la salida de R como sustituto del razonamiento.** `tidyactuarial` puede valorar correctamente una corriente mal modelada: el software reproduce, resuelve o audita la formulación, pero no decide por usted cuáles son los flujos, la perspectiva, la fecha focal ni la ley financiera apropiada.
+:::
+
+## Problemas tipo FM
+
+Los problemas siguientes son ejercicios propios, construidos con una estructura cercana a la de matemática financiera de Exam FM; no reproducen preguntas oficiales.
+
+En ambos se seguirá la secuencia:
+
+$$
+\boxed{
+\text{Análisis}
+\longrightarrow
+\text{Resolución}
+\longrightarrow
+\text{Interpretación}
+\longrightarrow
+\text{Verificación computacional}.
+}
+$$
+
+La finalidad no es solo obtener una respuesta, sino identificar bien la estructura financiera del problema.
+
+### Problema 1. Tiempo desconocido con restricción entera
+
+Los padres de Paola quieren reunir recursos para la matrícula universitaria de su hermano menor dentro de 6 años, y le piden a Paola que les ayude a planear los aportes. Harán un primer aporte de COP 3.200.000 dentro de $n$ meses y un segundo aporte de COP 5.500.000 dentro de $2n$ meses.
+
+El fondo reconoce una tasa nominal anual de interés del $8.4\%$, convertible mensualmente.
+
+Determine el **mayor valor entero de $n$** para el cual el fondo acumulará al menos COP 11.500.000 al finalizar los 6 años.
+
+#### Análisis
+
+La meta se evalúa al finalizar seis años, es decir, en el mes
+
+$$
+72.
+$$
+
+La tasa nominal anual convertible mensualmente produce una tasa efectiva mensual
+
+$$
+j_{12}
+=
+\frac{0.084}{12}
+=
+0.007.
+$$
+
+El primer aporte se realiza en el mes $n$, por lo que acumula durante
+
+$$
+72-n
+$$
+
+meses.
+
+El segundo se realiza en el mes $2n$ y acumula durante
+
+$$
+72-2n
+$$
+
+meses.
+
+Trabajando en millones de pesos, el valor acumulado es
+
+$$
+V_{72}(n)
+=
+3.2(1.007)^{72-n}
++
+5.5(1.007)^{72-2n}.
+$$
+
+La condición contractual es
+
+$$
+V_{72}(n)\geq11.5.
+$$
+
+Además, $V_{72}(n)$ disminuye cuando $n$ aumenta: retrasar cualquiera de los aportes reduce el tiempo que permanece invertido.
+
+Hay entonces un umbral a partir del cual la meta deja de alcanzarse.
+
+#### Resolución
+
+Primero se resuelve la ecuación continua asociada:
+
+$$
+3.2(1.007)^{72-n}
++
+5.5(1.007)^{72-2n}
+=
+11.5.
+$$
+
+Sea
+
+$$
+x=(1.007)^{-n}.
+$$
+
+Entonces
+
+$$
+(1.007)^{72}
+\left(
+3.2x+5.5x^2
+\right)
+=
+11.5,
+$$
+
+de donde
+
+$$
+5.5x^2
++
+3.2x
+-
+\frac{11.5}{(1.007)^{72}}
+=
+0.
+$$
+
+La raíz positiva es aproximadamente
+
+$$
+x=0.8710.
+$$
+
+Así,
+
+$$
+n^*
+=
+-\frac{\log(x)}{\log(1.007)}
+\approx
+19.8028.
+$$
+
+Este valor es el **umbral continuo**, pero todavía no es la respuesta, porque $n$ debe ser un número entero de meses.
+
+Evaluamos los dos enteros adyacentes.
+
+Para $n=19$,
+
+$$
+V_{72}(19)
+=
+3.2(1.007)^{53}
++
+5.5(1.007)^{34}
+\approx
+11.6035.
+$$
+
+Es decir,
+
+$$
+V_{72}(19)>11.5.
+$$
+
+Para $n=20$,
+
+$$
+V_{72}(20)
+=
+3.2(1.007)^{52}
++
+5.5(1.007)^{32}
+\approx
+11.4747,
+$$
+
+y entonces
+
+$$
+V_{72}(20)<11.5.
+$$
+
+De aquí,
+
+$$
+\boxed{n=19\text{ meses}.}
+$$
+
+#### Interpretación del resultado
+
+Paola puede decirles a sus padres que el primer aporte se puede retrasar hasta el mes 19 y el segundo hacerse en el mes
+
+$$
+2(19)=38
+$$
+
+sin incumplir la meta.
+
+Si ambos aportes se retrasan un mes más, hasta los meses 20 y 40, respectivamente, el saldo acumulado queda por debajo de COP 11.500.000.
+
+La solución continua
+
+$$
+n^*\approx19.8028
+$$
+
+localiza la frontera financiera; la condición de que $n$ sea entero es la que determina la respuesta contractual.
+
+#### Verificación con `tidyactuarial`
+
+Definimos primero el valor acumulado como función de $n$.
+
+```{r}
+#| label: soa-tiempo-entero-umbral
+
+valor_final_meses <- function(n) {
+  3.2e6 * accumulation_factor(
+    s = n / 12,                     # fecha inicial, en años
+    t = 6,                          # tiempo, en años
+    i = 0.084,                      # tasa nominal anual
+    i_type = "nominal_interest",    # tipo de tasa
+    m = 12                          # frecuencia de conversión por año
+  ) +
+    5.5e6 * accumulation_factor(
+      s = 2 * n / 12,               # fecha inicial, en años
+      t = 6,                        # tiempo, en años
+      i = 0.084,                    # tasa nominal anual
+      i_type = "nominal_interest",  # tipo de tasa
+      m = 12                        # frecuencia de conversión por año
+    )
+}
+
+n_umbral_tidy <- solve_value(
+  fn = valor_final_meses,           # función financiera que se invierte
+  solve_for = "n",                  # argumento desconocido
+  target = 11.5e6,                  # valor objetivo de la ecuación
+  interval = c(0, 30),              # intervalo de búsqueda de la raíz
+  method = "uniroot"                # método numérico
+)
+
+valor_n19 <- valor_final_meses(19)
+valor_n20 <- valor_final_meses(20)
+```
+
+`solve_value()` reproduce el umbral continuo; la condición entera la auditamos después con los valores vecinos.
+
+```{r}
+#| label: tabla-soa-tiempo-entero
+#| echo: false
+#| results: asis
+
+tibble(
+  magnitud = c(
+    "Umbral continuo n*",
+    "Valor final con n = 19",
+    "Valor final con n = 20"
+  ),
+  analitico = c(
+    19.8027810210,
+    11.6035133663,
+    11.4747247307
+  ),
+  tidyactuarial = c(
+    n_umbral_tidy,
+    valor_n19 / 1e6,
+    valor_n20 / 1e6
+  )
+) |>
+  tabla_comparacion(
+    titulo = "Problema tipo FM: umbral temporal y comprobación discreta",
+    digits = 4
+  )
+```
+
+::: {.callout-important title="Resultado" icon=false}
+El solucionador numérico responde una pregunta continua:
+
+$$
+n^*\approx19.8028.
+$$
+
+El contrato formula una pregunta discreta:
+
+$$
+n\in\mathbb{Z}.
+$$
+
+Por eso redondear automáticamente $n^*$ sería incorrecto: la respuesta sale de comprobar los enteros adyacentes y respetar el sentido de la desigualdad.
+:::
+
+### Problema 2. Equivalencia entre dos leyes financieras
+
+Una cooperativa ofrece dos inversiones cuyo valor acumulado se comparará al finalizar el año 14.
+
+En la primera, se invierten COP 8.000.000 hoy en una cuenta que reconoce una tasa nominal anual de interés $i^{(4)}$, convertible trimestralmente.
+
+En la segunda, se invierten COP 8.000.000 al finalizar el año 2 en un fondo cuya fuerza de interés, medida desde hoy, está dada por
+
+$$
+\delta(t)
+=
+\frac{1}{8+t},
+\qquad
+t\geq0.
+$$
+
+Al finalizar el año 14, ambas inversiones tienen exactamente el mismo valor acumulado.
+
+Determine $i^{(4)}$.
+
+#### Análisis
+
+Las dos inversiones tienen el mismo capital nominal inicial, pero empiezan en fechas distintas y usan leyes financieras diferentes.
+
+La primera permanece invertida desde $t=0$ hasta $t=14$.
+
+La segunda permanece invertida desde $t=2$ hasta $t=14$.
+
+La fecha natural para establecer la equivalencia es
+
+$$
+t=14.
+$$
+
+La estrategia consiste en:
+
+1. determinar el factor de acumulación del fondo con fuerza variable entre $t=2$ y $t=14$;
+2. determinar el factor correspondiente a la inversión con tasa nominal durante 14 años;
+3. imponer que ambos valores acumulados sean iguales.
+
+#### Resolución
+
+Para la segunda inversión,
+
+$$
+a(2,14)
+=
+\exp\left(
+\int_2^{14}
+\delta(t)\,dt
+\right).
+$$
+
+Como
+
+$$
+\delta(t)=\frac{1}{8+t},
+$$
+
+se obtiene
+
+$$
+a(2,14)
+=
+\exp\left(
+\int_2^{14}
+\frac{1}{8+t}\,dt
+\right).
+$$
+
+La integral es
+
+$$
+\int_2^{14}
+\frac{1}{8+t}\,dt
+=
+\log(22)-\log(10)
+=
+\log(2.2).
+$$
+
+Luego,
+
+$$
+a(2,14)
+=
+\exp(\log 2.2)
+=
+2.2.
+$$
+
+El valor final del segundo fondo es entonces
+
+$$
+8\,000\,000(2.2)
+=
+17\,600\,000.
+$$
+
+Para la primera inversión, la tasa trimestral correspondiente a $i^{(4)}$ es
+
+$$
+\frac{i^{(4)}}{4}.
+$$
+
+En 14 años existen
+
+$$
+14(4)=56
+$$
+
+periodos trimestrales.
+
+Luego, su valor acumulado es
+
+$$
+8\,000\,000
+\left(
+1+\frac{i^{(4)}}{4}
+\right)^{56}.
+$$
+
+La ecuación de valor en $t=14$ es
+
+$$
+8\,000\,000
+\left(
+1+\frac{i^{(4)}}{4}
+\right)^{56}
+=
+17\,600\,000.
+$$
+
+Cancelando el capital común,
+
+$$
+\left(
+1+\frac{i^{(4)}}{4}
+\right)^{56}
+=
+2.2.
+$$
+
+Así,
+
+$$
+1+\frac{i^{(4)}}{4}
+=
+2.2^{1/56},
+$$
+
+y
+
+$$
+i^{(4)}
+=
+4
+\left(
+2.2^{1/56}-1
+\right).
+$$
+
+Numéricamente,
+
+$$
+\boxed{
+i^{(4)}
+\approx
+5.6717\%.
+}
+$$
+
+#### Interpretación del resultado
+
+La igualdad de los valores finales no exige que las inversiones usen la misma forma de tasa ni que empiecen en la misma fecha.
+
+La inversión con fuerza variable necesita solamente 12 años para alcanzar un factor de acumulación de
+
+$$
+2.2,
+$$
+
+mientras que la inversión iniciada hoy dispone de 14 años. La tasa nominal trimestral que buscamos es precisamente la que produce ese mismo factor acumulado sobre su propio horizonte.
+
+La equivalencia se establece con **valores en una fecha común**, no con la igualdad de las tasas que usan los dos productos.
+
+#### Verificación con `tidyactuarial`
+
+`accumulation_factor()` permite representar ambas leyes financieras.
+
+Primero se define la fuerza variable:
+
+```{r}
+#| label: soa-leyes-financieras
+
+delta_fondo <- function(t) {
+  1 / (8 + t)
+}
+
+factor_fuerza <- accumulation_factor(
+  s = 2,                        # fecha inicial, en años
+  t = 14,                       # tiempo, en años
+  delta = delta_fondo           # fuerza de interés, función del tiempo
+)
+
+tasa_nominal_tidy <- solve_value(
+  fn = accumulation_factor,     # función financiera que se invierte
+  solve_for = "i",              # argumento desconocido
+  target = factor_fuerza,       # valor objetivo de la ecuación
+  args = list(
+    s = 0,
+    t = 14,
+    i_type = "nominal_interest",
+    m = 4
+  ),
+  interval = c(0, 0.10),        # intervalo de búsqueda de la raíz
+  method = "uniroot"            # método numérico
+)
+
+factor_nominal <- accumulation_factor(
+  s = 0,                        # fecha inicial, en años
+  t = 14,                       # tiempo, en años
+  i = tasa_nominal_tidy,        # tasa nominal anual
+  i_type = "nominal_interest",  # tipo de tasa
+  m = 4                         # frecuencia de conversión por año
+)
+
+valor_fuerza <- 8e6 * factor_fuerza
+valor_nominal <- 8e6 * factor_nominal
+```
+
+La auditoría compara el factor bajo ambas leyes y el valor final resultante.
+
+```{r}
+#| label: tabla-soa-leyes-financieras
+#| echo: false
+#| results: asis
+
+tibble(
+  magnitud = c(
+    "Factor bajo la fuerza variable",
+    "Tasa nominal anual i^(4)",
+    "Factor bajo la tasa nominal",
+    "Valor al final del año 14"
+  ),
+  analitico = c(
+    2.2,
+    0.0567167202,
+    2.2,
+    17.6
+  ),
+  tidyactuarial = c(
+    factor_fuerza,
+    tasa_nominal_tidy,
+    factor_nominal,
+    valor_nominal / 1e6
+  )
+) |>
+  tabla_comparacion(
+    titulo = "Problema tipo FM: equivalencia entre leyes financieras",
+    digits = 4
+  )
+```
+
+::: {.callout-important title="Resultado" icon=false}
+La integral determina el factor correspondiente a la fuerza de interés variable:
+
+$$
+a(2,14)=2.2.
+$$
+
+La tasa nominal se obtiene imponiendo exactamente ese mismo factor para la primera inversión:
+
+$$
+\left(
+1+\frac{i^{(4)}}{4}
+\right)^{56}
+=
+2.2.
+$$
+
+`tidyactuarial` reproduce las dos etapas de una igualdad financiera que ya establecimos analíticamente.
+:::
+
+## Ejercicios del capítulo
+
+Los ejercicios que siguen avanzan desde la construcción básica de ecuaciones de valor hasta problemas con fechas desconocidas, tasas, calendarios, TIR múltiples, tasas variables y leyes generales de acumulación. Los últimos se resuelven en R y combinan `tidyactuarial` con el análisis de datos.
+
+### Formulación y sustitución de obligaciones
+
+1. Una empresa debe pagar COP 12 millones en $t=1.5$ y COP 18 millones en $t=4$. Las dos obligaciones se sustituirán por un único pago $X$ en $t=3$. La tasa efectiva anual es del $7\%$.
+
+   a. Represente las obligaciones mediante un diagrama de flujo.  
+   b. Formule la ecuación de valor en $t=3$.  
+   c. Determine $X$.  
+   d. Repita el planteamiento con fecha focal en $t=0$ y compruebe que obtiene el mismo resultado.
+
+2. Una obligación de COP 45 millones exigible hoy se reemplaza por un pago de COP 20 millones dentro de seis meses y un segundo pago $X$ dentro de dieciocho meses. La tasa efectiva anual es del $8\%$.
+
+   a. Construya el diagrama de flujo.  
+   b. Formule una ecuación de valor en $t=0$.  
+   c. Determine $X$.  
+   d. Compruebe el resultado utilizando una fecha focal distinta.
+
+### Fecha desconocida
+
+3. Dos obligaciones de COP 6 millones y COP 9 millones vencen al finalizar los años 2 y 5, respectivamente. Se desea sustituirlas por un único pago de COP 16 millones realizado en una fecha desconocida $x$. La tasa efectiva anual es del $7\%$.
+
+   a. Construya la ecuación de valor en $t=0$.  
+   b. Despeje analíticamente $x$.  
+   c. Justifique por qué la solución debe encontrarse entre los años 4 y 5.  
+   d. Verifique la solución mediante `solve_value()`.  
+   e. Sustituya la fecha obtenida en la ecuación original y calcule el residuo.
+
+### Fechas calendario y tasas nominales
+
+4. En la fecha de valoración 15 de enero de 2027, una compañía espera recibir:
+
+   | Fecha | Pago |
+   |:--:|--:|
+   | 30 de abril de 2027 | COP 8 millones |
+   | 15 de septiembre de 2027 | COP 12 millones |
+   | 28 de febrero de 2028 | COP 15 millones |
+
+   Con una tasa efectiva anual del $9\%$:
+
+   a. Calcule el valor presente bajo Actual/365.  
+   b. Repita el cálculo bajo Actual/360.  
+   c. Explique el origen de la diferencia.  
+   d. Verifique ambos resultados con `pv_flow()`. Incluya la fecha de valoración con un flujo igual a cero y explique por qué debe hacerse.  
+   e. Represente la corriente mediante `plot_cash_flow()` utilizando las fechas calendario.
+
+5. Una obligación de COP 20 millones en el mes 5 y otra de COP 35 millones en el mes 17 se sustituyen por un único pago $X$ en el mes 11. La tasa es nominal anual de interés del $10.8\%$, convertible mensualmente.
+
+   a. Determine la tasa efectiva mensual.  
+   b. Formule la ecuación de valor en el mes 11.  
+   c. Calcule $X$.  
+   d. Audite el resultado con `present_value()` o `future_value()`, indicando correctamente `i_type` y `m`.
+
+### Tasa desconocida y métodos numéricos
+
+6. Una inversión exige un desembolso de COP 100 millones en $t=0$ y produce ingresos de COP 40 millones en $t=1$ y COP 90 millones en $t=2$.
+
+   a. Formule la ecuación para la tasa interna de retorno.  
+   b. Introduzca $v=(1+i)^{-1}$ y obtenga una ecuación cuadrática.  
+   c. Determine la tasa efectiva anual económicamente admisible.  
+   d. Justifique la existencia y unicidad de la solución.  
+   e. Verifique el resultado con `irr_flow()`.
+
+7. Un proyecto requiere una inversión inicial de COP 25 millones y genera ingresos de COP 8 millones en $t=1$, COP 10 millones en $t=3$ y COP 15 millones en $t=5$.
+
+   a. Construya la función de valor presente $F(i)$.  
+   b. Calcule $F'(i)$ y demuestre que $F$ es estrictamente decreciente para $i>-1$.  
+   c. Compruebe que la raíz se encuentra entre $8\%$ y $10\%$.  
+   d. Aplique dos iteraciones del método de Newton a partir de $i_0=0.09$.  
+   e. Compare el resultado con `irr_flow()` utilizando el intervalo previamente justificado.
+
+### Múltiples tasas internas de retorno
+
+8. Una operación presenta, en millones de pesos, el flujo
+
+   $$
+   (-100,\ 260,\ -168)
+   $$
+
+   en las fechas $t=0,1,2$.
+
+   a. Represente el flujo mediante `plot_cash_flow()`.  
+   b. Formule la ecuación de la TIR.  
+   c. Demuestre algebraicamente que las tasas
+
+   $$
+   20\%
+   \qquad\text{y}\qquad
+   40\%
+   $$
+
+   satisfacen la ecuación.  
+   d. Determine los intervalos de tasas para los cuales el VPN es positivo.  
+   e. Utilice `irr_flow_multi()` con `search_interval = c(0, 0.60)` y compruebe las dos raíces.  
+   f. Explique por qué esta operación no puede resumirse adecuadamente mediante una única TIR.
+
+### Tasas variables y varias restricciones
+
+9. Un fondo recibe COP 20 millones en $t=0$ y COP 15 millones en $t=1$. Las tasas efectivas anuales son $5\%$, $7\%$ y $6\%$ durante el primero, segundo y tercer año, respectivamente.
+
+   a. Construya $a(0,3)$ y $a(1,3)$.  
+   b. Calcule el valor acumulado del fondo en $t=3$.  
+   c. Determine el valor equivalente de los dos aportes en $t=0$.  
+   d. Compruebe que el valor obtenido en $t=0$, acumulado hasta $t=3$, coincide con el resultado del literal b.  
+   e. Verifique los factores mediante `accumulation_factor()`.
+
+10. Un fondo debe cubrir obligaciones de COP 50 millones en $t=2$ y COP 80 millones en $t=5$. Para financiarlas se realizarán aportes $X$ en $t=0$ y $Y$ en $t=3$. La tasa efectiva anual es del $5\%$ y se establece adicionalmente que
+
+   $$
+   Y=1.5X.
+   $$
+
+   a. Formule una ecuación de valor para las obligaciones y los aportes.  
+   b. Resuelva el sistema formado por la ecuación financiera y la relación $Y=1.5X$.  
+   c. Verifique la solución utilizando $t=5$ como fecha focal.  
+   d. Interprete financieramente los signos de $X$ y $Y$.
+
+### Leyes generales de acumulación
+
+11. Una ley financiera está definida por
+
+   $$
+   a(t)
+   =
+   \exp\left(
+   0.03t+0.002t^2
+   \right),
+   \qquad t\geq0.
+   $$
+
+   Dos obligaciones de COP 10 millones y COP 18 millones ubicadas en $t=1$ y $t=4$ se sustituyen por un pago único $X$ en $t=2$.
+
+   a. Construya $a(1,2)$ y $v(2,4)$ a partir de $a(t)$.  
+   b. Determine $X$ tomando $t=2$ como fecha focal.  
+   c. Repita el planteamiento utilizando $t=0$.  
+   d. Verifique la independencia de la fecha focal.  
+   e. Audite los factores con `accumulation_factor(a = ...)` y `discount_factor(a = ...)`.
+
+12. Considere obligaciones de 100 en $t=0$ y 120 en $t=2$, sustituidas por un pago $X$ en $t=1$. Suponga una tasa de interés simple anual del $8\%$.
+
+   a. Utilice directamente el factor local
+
+   $$
+   1+0.08(t-s)
+   $$
+
+   y determine $X$ utilizando $t=1$ como fecha focal.  
+   b. Repita el cálculo con fecha focal en $t=3$.  
+   c. Compruebe que los resultados son diferentes y explique la falta de composición.  
+   d. Defina ahora
+
+   $$
+   a(t)=1+0.08t
+   $$
+
+   respecto de un origen común y construya
+
+   $$
+   a(s,t)=\frac{a(t)}{a(s)}
+   $$
+
+   junto con su factor recíproco.  
+   e. Calcule nuevamente $X$ utilizando las fechas focales $t=1$ y $t=3$ y compruebe que la equivalencia se conserva.
+
+### Ejercicios con R: `tidyactuarial` y el tidyverse
+
+Estos ejercicios se resuelven en R. Combinan `tidyactuarial` con el tidyverse —`dplyr`, `tidyr`, `purrr`, `ggplot2` y `lubridate`— para organizar, comparar y graficar resultados. Como en el resto del capítulo, plantee primero la ecuación de valor: el código debe confirmarla, no reemplazarla.
+
+13. **La cartera de cobros de Paola.** La aseguradora tiene estas cuentas por cobrar, en millones de pesos:
+
+    | Cliente | Vencimiento | Monto |
+    |:--|:--:|--:|
+    | Andes | 2027-02-15 | 12.5 |
+    | Andes | 2027-07-31 | 18.0 |
+    | Caribe | 2027-04-30 | 9.8 |
+    | Caribe | 2027-09-15 | 14.2 |
+    | Caribe | 2027-11-30 | 6.5 |
+    | Pacífico | 2027-03-31 | 21.0 |
+    | Pacífico | 2027-10-31 | 16.4 |
+
+    Paola propone a cada cliente reemplazar sus obligaciones por un único pago el 31 de diciembre de 2027, con una tasa del $9\%$ E.A. y la convención Actual/365.
+
+    a. Guarde la cartera en una `tibble` con `tribble()` y convierta los vencimientos con `lubridate::ymd()`.
+    b. Con `mutate()`, calcule los días que van de cada vencimiento al 31 de diciembre.
+    c. Con `group_by(cliente)` y `summarise()`, calcule el pago único de cada cliente con `future_value()` y compárelo con la suma nominal de sus obligaciones.
+    d. ¿Qué cliente paga, en proporción, más por encima de su suma nominal? Explique por qué, mirando las fechas de sus obligaciones.
+    e. Verifique el resultado de un cliente con `fv_flow()`. Recuerde que la función acumula hasta la fecha más tardía que recibe: agregue el 31 de diciembre con un flujo igual a cero.
+
+    Puede arrancar así:
+
+    ```r
+    cartera <- tribble(
+      ~cliente,   ~vencimiento,  ~monto,
+      "Andes",    "2027-02-15",  12.5,
+      "Andes",    "2027-07-31",  18.0,
+      "Caribe",   "2027-04-30",   9.8,
+      "Caribe",   "2027-09-15",  14.2,
+      "Caribe",   "2027-11-30",   6.5,
+      "Pacífico", "2027-03-31",  21.0,
+      "Pacífico", "2027-10-31",  16.4
+    ) |>
+      mutate(vencimiento = lubridate::ymd(vencimiento))
+
+    fecha_pago <- lubridate::ymd("2027-12-31")
+    # Continúe: días hasta fecha_pago, pago único por cliente y comparación
+    ```
+
+14. **Una malla de fechas focales.** Tome la corriente del ejemplo de valoración de flujos: $800$, $1\,200$, $-500$ y $1\,500$ en los años $1$, $3$, $5$ y $6$, con una tasa del $7\%$ E.A.
+
+    a. Construya una `tibble` con las fechas focales `f = seq(0, 8, by = 0.5)` y, con `purrr::map_dbl()`, calcule $V(f)$ para cada una. Sugerencia: $V(f)$ es el valor presente de la corriente, obtenido con `pv_flow()`, multiplicado por `accumulation_factor(t = f, i = 0.07)`.
+    b. Agregue la columna $V(f)/a(f)$ y compruebe con `summarise()` que es constante. ¿Qué número es?
+    c. Grafique $V(f)$ contra $f$ con `ggplot2`. ¿Por qué la curva nunca cruza el eje horizontal?
+    d. Repita el cálculo con factores locales de interés simple: acumule con $1+0.07(f-t_j)$ los flujos anteriores a $f$ y descuente con $1/[1+0.07(t_j-f)]$ los posteriores. Grafique el cociente entre ese valor y $1+0.07f$ y compruebe que ya no es constante. Relacione el resultado con la sección sobre el interés simple.
+
+15. **El perfil del VPN de dos contratos.** Considere el proyecto de consultoría, con flujos $(-16,\ 4,\ 6.5,\ 9)$ en los años $0, 1, 3, 5$, y el contrato con dos TIR, con flujos $(-100,\ 230,\ -132)$ en los años $0, 1, 2$, ambos en millones de pesos.
+
+    a. Con `tidyr::expand_grid()` construya todas las combinaciones de contrato y tasa, con tasas entre $0\%$ y $30\%$ cada $0.25$ puntos porcentuales. Sugerencia: guarde los flujos y los tiempos de cada contrato en columnas de listas.
+    b. Calcule el VPN de cada combinación con `pv_flow()`, usando `rowwise()` o `purrr::pmap_dbl()`.
+    c. Grafique los dos perfiles con `ggplot2`, uno por panel con `facet_wrap()`, y marque con `geom_hline()` el nivel $\text{VPN}=0$.
+    d. Obtenga las TIR con `irr_flow()` y `irr_flow_multi()` y agréguelas a la gráfica con `geom_vline()`.
+    e. Con `filter()` y `summarise()`, encuentre el rango de tasas de oportunidad en el que cada contrato tiene VPN positivo. ¿Para qué tasas de oportunidad conviene cada uno?
+
+16. **Fechas desconocidas en lote.** En cada caso, dos obligaciones se sustituyen por un pago único conocido en una fecha desconocida $x$. Los montos están en millones de pesos:
+
+    | Caso | Obligaciones | Pago único | Tasa E.A. |
+    |:--:|:--|--:|--:|
+    | 1 | 4 en $t=1$ y 7 en $t=4$ | 12 | $8\%$ |
+    | 2 | 10 en $t=1$ y 10 en $t=3$ | 22 | $6\%$ |
+    | 3 | 5 en $t=0.5$ y 15 en $t=2.5$ | 21.5 | $9\%$ |
+    | 4 | 30 en $t=2$ y 45 en $t=6$ | 80 | $7\%$ |
+
+    a. Guarde los casos en una `tibble`, con una fila por caso.
+    b. Calcule el valor presente de las obligaciones de cada caso con `pv_flow()` y la fecha analítica con logaritmos.
+    c. Calcule la fecha con `solve_value()` dentro de `purrr::pmap_dbl()`. Antes de programar, justifique para cada caso un intervalo de búsqueda.
+    d. Agregue una columna con el residuo de cada solución y otra que indique si la fecha cae entre las dos obligaciones originales. ¿En qué casos no ocurre así? ¿Por qué es posible?
+
+17. **Sensibilidad y plazo.** Considere pagos únicos de COP 1 millón ubicados en $t=1, 2, \ldots, 30$ años y una tasa del $8\%$ E.A.
+
+    a. Calcule el valor presente de cada pago con `present_value()` a las tasas $8\%-h$ y $8\%+h$, con $h=0.0001$, y aproxime la sensibilidad relativa $V'(i)/V(i)$ con una diferencia centrada.
+    b. Compare la aproximación con la fórmula $-t/(1+i)$ y calcule el error absoluto máximo con `summarise()`.
+    c. Grafique la sensibilidad relativa contra el plazo. ¿Qué forma tiene la curva y por qué?
+    d. ¿Cuánto cambia, en porcentaje, el valor presente del pago a 30 años si la tasa sube un punto porcentual? Compare con la aproximación $-\dfrac{t}{1+i}(0.01)$ y explique la diferencia a partir de la convexidad que vimos en la sección de sensibilidad.
+
+::: {.callout-note title="Práctica adicional" icon=false}
+Los ejercicios del capítulo se pueden complementar con problemas de ecuaciones de valor, tasas desconocidas y fechas desconocidas de las referencias generales de matemática financiera que usamos en el libro, en particular Finan, Kellison y Broverman.
+
+Para preparar el Exam FM sirve mucho alternar problemas en los que cambia la naturaleza de la incógnita: monto, fecha, tasa o combinación de restricciones. La dificultad no siempre está en el álgebra; con frecuencia está en reconocer qué ecuación hay que construir.
+:::
+
+## Síntesis del capítulo
+
+Una ecuación de valor expresa la equivalencia financiera entre flujos ubicados en fechas diferentes, después de trasladarlos a una fecha común.
+
+Su construcción requiere identificar:
+
+- la perspectiva desde la cual se observan los flujos;
+- la convención de signos;
+- el origen y la unidad de tiempo;
+- la fecha focal;
+- la ley financiera;
+- la incógnita que debe determinarse.
+
+Para una función de acumulación positiva $a(t)$,
+
+$$
+a(s,t)
+=
+\frac{a(t)}{a(s)}.
+$$
+
+Entonces, el valor de una corriente de flujos en una fecha focal $f$ se puede escribir como
+
+$$
+\boxed{
+V(f)
+=
+\sum_{j=1}^{n}
+C_j
+\frac{a(f)}{a(t_j)}.
+}
+$$
+
+Una ecuación de valor bajo una convención de signos se expresa mediante
+
+$$
+\boxed{V(f)=0.}
+$$
+
+Con esta representación se demuestra que, cuando todos los traslados corresponden a una misma ley financiera coherente, la equivalencia no depende de la fecha focal elegida.
+
+El interés compuesto con tasa constante es solo un caso particular: la propiedad sigue valiendo con tasas variables, siempre que los factores pertenezcan a una misma función de acumulación.
+
+A lo largo del capítulo se estudiaron tres tipos fundamentales de incógnita:
+
+$$
+\boxed{
+\begin{array}{ccl}
+\text{monto} &\longrightarrow& \text{ecuación frecuentemente lineal},\\[4pt]
+\text{fecha} &\longrightarrow& \text{incógnita dentro del factor financiero},\\[4pt]
+\text{tasa} &\longrightarrow& \text{ecuación generalmente no lineal}.
+\end{array}
+}
+$$
+
+También analizamos problemas con varias restricciones, fechas calendario, tasas nominales, tasas que cambian por intervalos y corrientes que admiten más de una tasa interna de retorno.
+
+La solución matemática depende de la estructura del problema: puede requerir un despeje directo, logaritmos, una transformación algebraica, un sistema de ecuaciones o un método numérico. En todos los casos, la solución debe satisfacer no solo la ecuación, sino también el **dominio financiero y las restricciones contractuales**.
+
+### Herramientas computacionales utilizadas
+
+Las funciones de `tidyactuarial` que usamos en el capítulo corresponden a tareas financieras diferentes:
+
+| Necesidad financiera | Función |
+|:--|:--|
+| Representar los pagos sobre el eje temporal | `plot_cash_flow()` |
+| Construir factores entre fechas | `accumulation_factor()` y `discount_factor()` |
+| Trasladar un pago individual | `present_value()` y `future_value()` |
+| Valorar una corriente completa | `pv_flow()` y `fv_flow()` |
+| Resolver una incógnita escalar continua | `solve_value()` |
+| Determinar una TIR dentro de un intervalo | `irr_flow()` |
+| Explorar una corriente con posibles TIR múltiples | `irr_flow_multi()` |
+
+Estas funciones no reemplazan la formulación financiera: su papel en el capítulo fue representar, reproducir y auditar resultados que salen de la ecuación de valor.
+
+La secuencia general puede resumirse como
+
+$$
+\boxed{
+\text{flujos}
+\longrightarrow
+\text{fecha focal}
+\longrightarrow
+\text{ecuación de valor}
+\longrightarrow
+\text{solución}
+\longrightarrow
+\text{interpretación}
+\longrightarrow
+\text{auditoría}.
+}
+$$
+
+## Transición al capítulo siguiente
+
+Hasta ahora hemos descrito los conjuntos de pagos enumerando cada flujo por separado.
+
+Sin embargo, muchas operaciones financieras contienen **secuencias regulares de pagos**: cuotas mensuales, aportes periódicos, rentas, cánones o beneficios pagados durante un número determinado de periodos.
+
+Podríamos valorar estas corrientes escribiendo una ecuación de valor para cada pago, pero la regularidad de la secuencia nos permite simplificar la suma y obtener expresiones cerradas.
+
+Estas estructuras son las **anualidades ciertas**, objeto del capítulo siguiente.
+
+Sus fórmulas no reemplazan las ecuaciones de valor que desarrollamos aquí; al contrario, salen de ellas.
+
