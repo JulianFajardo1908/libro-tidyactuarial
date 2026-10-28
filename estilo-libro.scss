@@ -1,0 +1,334 @@
+/*-- scss:defaults --*/
+
+// Tema del libro tidyactuarial.
+// Paleta tomada del mundo de los títulos valores: papel de seguridad,
+// tinta azul de grabado, oro de sello, verde billete y rojo de sello.
+
+@import url("https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,500;0,700;1,400;1,500&family=Alegreya+Sans:ital,wght@0,400;0,500;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap");
+
+// Colores base
+$papel: #FCFDFB;
+$tinta: #1C2430;
+$tinta-suave: #4A5563;
+$azul-grabado: #1F4E79;
+$oro-sello: #B8860B;
+$verde-billete: #2E6B4F;
+$rojo-sello: #9B2335;
+$linea: #D9DFE5;
+
+// Tipografía
+$font-family-sans-serif: "Alegreya Sans", "Source Sans 3", system-ui, sans-serif;
+$font-family-base: "Alegreya", "Iowan Old Style", Georgia, serif;
+$headings-font-family: "Alegreya Sans", "Source Sans 3", system-ui, sans-serif;
+$font-family-monospace: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+// Tamaño en pantalla. Alegreya tiene una altura de x pequeña, así que 18 px
+// se leen como unos 16 px de una tipografía de texto habitual.
+$font-size-root: 18px;
+$line-height-base: 1.62;
+$headings-font-weight: 600;
+$headings-line-height: 1.25;
+
+$body-bg: $papel;
+$body-color: $tinta;
+$headings-color: $tinta;
+$link-color: $azul-grabado;
+$link-decoration: underline;
+$link-hover-color: darken($azul-grabado, 12%);
+
+$code-color: #24476B;
+$code-bg: #EEF2F5;
+$code-block-bg: #F3F6F8;
+$border-color: $linea;
+$border-radius: 3px;
+
+// Cajas de Quarto según su papel en el libro
+$callout-color-note: $azul-grabado;       // definiciones y notas
+$callout-color-tip: $oro-sello;           // ejemplos e ideas clave
+$callout-color-important: $verde-billete; // resultados y convenciones
+$callout-color-warning: $rojo-sello;      // advertencias
+$callout-color-caution: $rojo-sello;
+
+// Ancho de la columna de texto: líneas de 75 a 80 caracteres
+$grid-body-width: 660px;
+
+/*-- scss:rules --*/
+
+body {
+  font-variant-numeric: lining-nums proportional-nums;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgba($oro-sello, 0.22);
+}
+
+// Título del capítulo -------------------------------------------------------
+
+#title-block-header {
+  margin-bottom: 2.5rem;
+
+  .title {
+    font-family: $font-family-base;
+    font-weight: 500;
+    font-size: 2.6rem;
+    line-height: 1.12;
+    letter-spacing: -0.01em;
+    color: $tinta;
+  }
+
+  .subtitle {
+    font-family: $headings-font-family;
+    font-weight: 500;
+    font-size: 1.05rem;
+    color: $oro-sello;
+    font-variant-numeric: lining-nums;
+    margin-top: 0.4rem;
+    padding-top: 0.6rem;
+    border-top: 3px double rgba($azul-grabado, 0.35);
+    display: inline-block;
+  }
+}
+
+// Encabezados ---------------------------------------------------------------
+
+h2 {
+  font-size: 1.55rem;
+  margin-top: 3rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 3px double rgba($azul-grabado, 0.35);
+}
+
+h3 {
+  font-size: 1.22rem;
+  margin-top: 2.2rem;
+}
+
+h4 {
+  font-size: 1.05rem;
+  margin-top: 1.8rem;
+  color: $tinta-suave;
+}
+
+h2, h3, h4 {
+  font-variant-numeric: lining-nums tabular-nums;
+
+  .header-section-number {
+    color: $oro-sello;
+    font-weight: 500;
+    margin-right: 0.15em;
+  }
+}
+
+// Texto ---------------------------------------------------------------------
+
+a {
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: 1px;
+}
+
+a:focus-visible {
+  outline: 2px solid $oro-sello;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+strong {
+  font-weight: 700;
+}
+
+// Matemática ----------------------------------------------------------------
+
+math[display="block"] {
+  margin: 0.9rem 0;
+}
+
+// Cajas (callouts) ----------------------------------------------------------
+
+div.callout.callout {
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-left-width: 4px;
+  border-left-style: solid;
+  border-radius: 0 $border-radius $border-radius 0;
+  box-shadow: none;
+  margin: 1.6rem 0;
+  background-color: rgba($azul-grabado, 0.035);
+
+  .callout-header {
+    background-color: transparent !important;
+    border-bottom: none;
+    padding-top: 0.55rem;
+  }
+
+  .callout-title-container {
+    font-family: $headings-font-family;
+    font-weight: 600;
+    font-size: 0.98rem;
+    letter-spacing: 0.005em;
+  }
+
+  .callout-body-container {
+    font-size: 0.97rem;
+  }
+
+  &.callout-titled .callout-body > :first-child {
+    margin-top: 0.25rem;
+  }
+}
+
+div.callout.callout-note {
+  border-left-color: $azul-grabado;
+  background-color: rgba($azul-grabado, 0.04);
+  .callout-title-container { color: $azul-grabado; }
+}
+
+div.callout.callout-tip {
+  border-left-color: $oro-sello;
+  background-color: rgba($oro-sello, 0.06);
+  .callout-title-container { color: darken($oro-sello, 14%); }
+}
+
+div.callout.callout-important {
+  border-left-color: $verde-billete;
+  background-color: rgba($verde-billete, 0.05);
+  .callout-title-container { color: $verde-billete; }
+}
+
+div.callout.callout-warning,
+div.callout.callout-caution {
+  border-left-color: $rojo-sello;
+  background-color: rgba($rojo-sello, 0.04);
+  .callout-title-container { color: $rojo-sello; }
+}
+
+// Código --------------------------------------------------------------------
+
+code {
+  font-size: 0.84em;
+  font-variant-numeric: normal;
+}
+
+:not(pre) > code {
+  color: $code-color;
+  background-color: $code-bg;
+  padding: 0.08em 0.32em;
+  border-radius: $border-radius;
+}
+
+div.sourceCode,
+pre.sourceCode {
+  background-color: $code-block-bg;
+  border: none;
+  border-left: 3px solid $linea;
+  border-radius: 0 $border-radius $border-radius 0;
+}
+
+pre code {
+  font-size: 0.72rem;   // ~82 caracteres por línea en la columna de texto
+  line-height: 1.6;
+}
+
+// Tablas: cifras alineadas para comparar resultados -------------------------
+
+.table,
+table {
+  font-family: $headings-font-family;
+  font-size: 0.92rem;
+  font-variant-numeric: lining-nums tabular-nums;
+  margin: 1.2rem 0 1.6rem;
+
+  > thead {
+    border-bottom: 1.5px solid $tinta;
+  }
+
+  > thead th {
+    font-weight: 600;
+    color: $tinta;
+    border-bottom: none;
+  }
+
+  > tbody > tr > td {
+    border-bottom: 1px solid $linea;
+  }
+
+  > tbody > tr:last-child > td {
+    border-bottom: 1px solid rgba($tinta, 0.5);
+  }
+}
+
+caption,
+.table caption {
+  font-family: $headings-font-family;
+  font-size: 0.9rem;
+  color: $tinta-suave;
+  caption-side: top;
+}
+
+// Figuras -------------------------------------------------------------------
+
+.figure-caption,
+figcaption {
+  font-family: $headings-font-family;
+  font-size: 0.9rem;
+  color: $tinta-suave;
+}
+
+// Notas al pie ----------------------------------------------------------------
+
+#footnotes,
+section.footnotes {
+  font-family: $headings-font-family;
+  font-size: 0.88rem;
+  color: $tinta-suave;
+  border-top: 3px double rgba($azul-grabado, 0.25);
+  margin-top: 3rem;
+}
+
+// Impresión -------------------------------------------------------------------
+
+@media print {
+  html {
+    font-size: 10.5pt;
+  }
+
+  body {
+    background: #FFFFFF;
+    line-height: 1.5;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  h2 {
+    margin-top: 2rem;
+  }
+
+  div.callout.callout {
+    margin: 1.1rem 0;
+  }
+
+  #title-block-header .title {
+    font-size: 2.1rem;
+  }
+
+  figure,
+  table {
+    break-inside: avoid;
+  }
+
+  h2, h3, h4 {
+    break-after: avoid;
+  }
+
+  a {
+    text-decoration: none;
+    color: inherit;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    scroll-behavior: auto !important;
+  }
+}

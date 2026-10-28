@@ -1,0 +1,4095 @@
+---
+title: "Tasas de interés y valor del dinero"
+---
+
+```{r}
+#| label: setup-capitulo-01
+#| include: false
+
+source("R/configuracion-libro.R")
+```
+
+
+## Propósito del capítulo
+
+Antes de valorar anualidades, préstamos, bonos o, más adelante, pagos sujetos a contingencias de vida, hay que entender bien cómo se acumula y cómo se descuenta un pago cierto. De eso se encarga la teoría del interés: nos da el lenguaje financiero básico de todo lo que sigue.
+
+Esta base también sirve para prepararse para el examen FM de la Society of Actuaries (SOA). La acumulación, el descuento, las tasas equivalentes, las anualidades, los préstamos, los bonos y la inmunización son el lenguaje necesario para enfrentarse a la inmensa teoría actuarial. No se trata de memorizar fórmulas, sino de identificar fechas, reconocer la convención de la tasa, construir los factores y comprobar que el resultado tenga sentido.[^soa-fm]
+
+Primero va la matemática y después el código. R y `tidyactuarial` entran cuando el cálculo lo justifica: para verificar equivalencias, comparar escenarios y auditar resultados.
+
+En los ejemplos aplicados nos acompañará **Paola**, una actuaria en formación que vive en Bogotá, trabaja como analista de inversiones en una aseguradora y se prepara para presentar el examen FM. Sus decisiones —dónde colocar los excedentes de tesorería de la compañía, qué CDT escoger, cómo leer el extracto de su cooperativa o qué oferta aceptar con su primer bono— son el tipo de preguntas que este capítulo enseña a responder.
+
+## Perspectiva histórica
+
+Una unidad monetaria disponible hoy no vale lo mismo que esa misma unidad en una fecha futura. Entre un momento y otro intervienen el tiempo, la posibilidad de invertir, la inflación, el riesgo y la incertidumbre, y la tasa de interés es la forma de reunir todo eso en una sola medida para comparar capitales ubicados en fechas distintas.
+
+La necesidad de valorar el uso del dinero es mucho más antigua que la matemática actuarial. En la Grecia clásica ya existían préstamos para financiar expediciones marítimas: el prestamista aportaba el capital para comprar mercancías o preparar el viaje; si la nave regresaba con éxito, el préstamo se devolvía junto con el interés acordado, pero si el barco o la carga se perdían bajo las condiciones previstas en el contrato, el prestamista podía perder parte o la totalidad de su dinero. Algunos de estos acuerdos aparecen en discursos judiciales atenienses, como *Contra Lácrito*, atribuido a Demóstenes.[^demostenes]
+
+Estos préstamos marítimos nos sirven para entender el origen de ciertas ideas actuariales. El interés no pagaba solamente el uso del dinero durante la travesía: también cubría el riesgo de naufragio, captura o pérdida de la mercancía. En una misma operación convivían el financiamiento, el rendimiento y una forma elemental de transferencia del riesgo. Todavía no era un seguro en el sentido moderno, pero sí un antecedente claro de los contratos marítimos posteriores.[^prestamos-maritimos]
+
+El interés también ha despertado preguntas morales. La Biblia no formula una teoría financiera, pero deja ver una preocupación clara por evitar que el préstamo se vuelva un instrumento de explotación: la ley mosaica prohibía cobrar interés al israelita pobre que necesitaba ayuda (Éxodo 22:25) y distinguía ese préstamo de auxilio de otras relaciones económicas mencionadas en Deuteronomio 23:19-20.[^biblia-interes] La discusión histórica no era solo cuánto cobrar, sino en qué circunstancias era justo hacerlo.
+
+Con el crecimiento del comercio europeo, los cálculos financieros empezaron a sistematizarse. Entre los siglos XVI y XVII, autores como Jean Trenchant, Simon Stevin y Richard Witt elaboraron tablas y procedimientos para trabajar con interés compuesto y anualidades. La obra de Witt, publicada en 1613, contiene uno de los primeros tratamientos extensos en lengua inglesa sobre la valoración de anualidades con interés compuesto.[^lewin]
+
+Con los años, estas ideas dejaron de ser simples procedimientos comerciales y se volvieron una estructura matemática para trasladar capitales entre fechas. Acumular un capital hacia el futuro, descontar un pago hacia una fecha anterior y hallar tasas financieramente equivalentes son tres caras del mismo problema: comparar dinero ubicado en momentos distintos.
+
+[^demostenes]: Demóstenes, *Contra Lácrito*, discurso 35, contiene un contrato marítimo ateniense en el que el pago depende de las condiciones del viaje: <https://topostext.org/work/435>.
+
+[^prestamos-maritimos]: Para una discusión histórica reciente de los préstamos marítimos griegos y su función económica, véase la reseña académica de *The Historical and Legal Context of the Athenian Maritime Loan*: <https://bmcr.brynmawr.edu/2026/2026.02.05/>.
+
+[^biblia-interes]: Éxodo 22:25 y Deuteronomio 23:19-20. Véase también la explicación contextual en <https://www.jw.org/es/biblioteca/biblia/biblia-estudio/libros/exodo/22/>.
+
+[^lewin]: C. G. Lewin, “An Early Book on Compound Interest”, disponible en <https://www.actuaries.org.uk/system/files/documents/pdf/0121-0132.pdf>.
+
+[^soa-fm]: Society of Actuaries, programa oficial del examen FM: <https://www.soa.org/globalassets/assets/files/edu/2026/spring/syllabi/2026-08-exam-fm-syllabus.pdf>.
+
+## Notación y convenciones
+
+Usaremos esta notación en el capítulo y reaparecerá a lo largo del libro.
+
+| Símbolo | Significado | Símbolo | Significado |
+|---|---|---|---|
+| $C$ | Capital inicial | $A(t)$ | Monto acumulado en $t$ |
+| $a(t)$ | Función de acumulación | $a(s,t)$ | Factor de acumulación de $s$ a $t$ |
+| $I_{[s,t]}$ | Interés en $[s,t]$ | $i_{[s,t]}$ | Tasa efectiva en $[s,t]$ |
+| $i$ | Tasa efectiva por periodo | $j_m$ | Tasa efectiva del subperiodo $1/m$ |
+| $d$ | Tasa efectiva de descuento | $d_m$ | Descuento efectivo del subperiodo $1/m$ |
+| $v$ | Factor de descuento | $v(s,t)$ | Factor de descuento de $t$ a $s$ |
+| $\delta$ | Fuerza de interés | $i^{(m)}$ | Tasa nominal de interés convertible $m$ veces |
+| $d^{(m)}$ | Tasa nominal de descuento | $PV$, $FV$ | Valor presente y valor futuro |
+| $t$ | Tiempo, en años salvo indicación | $m$ | Conversiones por año |
+
+La coherencia entre tasa y tiempo es una regla que nos acompañará todo el libro: si la tasa es anual, el tiempo va en años; si la tasa es mensual, el tiempo va en meses, o se convierte explícitamente.
+
+**Una tasa no es solo un número.** Trae consigo una convención —efectiva, nominal, de descuento o fuerza de interés—, además de una periodicidad y una unidad de tiempo. Pasar por alto cualquiera de estos elementos es una de las fuentes de error más comunes en teoría del interés.
+
+## Pagos ciertos y valor del dinero en el tiempo
+
+En este capítulo trabajaremos con **pagos ciertos**: pagos cuyo monto y fecha se conocen de antemano. Todavía no dependen de la muerte, la supervivencia, la invalidez, el retiro ni de ningún otro evento aleatorio.
+
+Que un pago sea cierto no quiere decir que valorarlo sea trivial. Un pago de USD 1000 hoy no es financieramente equivalente al mismo pago dentro de cinco años: el dinero de hoy se puede invertir, y el dinero futuro hay que descontarlo para compararlo con valores actuales.
+
+A esto se le llama **valor del dinero en el tiempo**. En su forma más simple dice que los pagos ubicados en fechas distintas no se comparan ni se suman directamente; primero hay que llevarlos a una fecha común, acumulando o descontando.
+
+Esta idea reaparecerá en ecuaciones de valor, anualidades, amortización, bonos, duración e inmunización, y también, en el bloque de contingencias de vida, dentro de valores actuariales presentes, primas y reservas.
+
+::: {.callout-tip title="Idea clave" icon=false}
+La valoración financiera no compara montos nominales aislados; compara montos expresados en una misma fecha de valoración.
+:::
+
+## Interés y tasa de interés
+
+Sea $C>0$ el capital inicial de una inversión realizada en el tiempo $0$. El monto acumulado se modela mediante una función
+
+$$
+A:[0,\infty)\longrightarrow (0,\infty),
+$$
+
+donde $A(t)$ representa el valor acumulado de la inversión al tiempo $t$, medido desde la fecha inicial.
+
+Como la inversión inicia con capital $C$, se exige la condición inicial
+
+$$
+A(0)=C.
+$$
+
+En un modelo sin retiros ni aportes adicionales, y bajo tasas de interés no negativas, se supone además que
+
+$$
+A(s)\le A(t)
+\qquad \text{si } 0\le s\le t.
+$$
+
+Esta condición expresa que el monto acumulado no disminuye con el tiempo.
+
+El **interés ganado** entre los tiempos $s$ y $t$, con $0\le s<t$, se define como el incremento del monto acumulado durante ese intervalo:
+
+$$
+I_{[s,t]}
+=
+A(t)-A(s).
+$$
+
+El interés $I_{[s,t]}$ es un **monto monetario**. La tasa de interés, en cambio, expresa ese crecimiento en términos relativos y usualmente se presenta como un porcentaje. Así, la tasa efectiva de interés del intervalo $[s,t]$ se define como
+
+$$
+i_{[s,t]}
+=
+\frac{A(t)-A(s)}{A(s)}.
+$$
+
+Cuando el intervalo corresponde a un periodo completo, por ejemplo de $0$ a $1$, se escribe simplemente
+
+$$
+i
+=
+\frac{A(1)-A(0)}{A(0)}.
+$$
+
+De esta expresión se obtiene
+
+$$
+A(1)
+=
+A(0)(1+i).
+$$
+
+Veamos la diferencia con un ejemplo. Ganar USD 100 no dice nada, por sí solo, sobre si la inversión fue buena o mala. Si esos USD 100 se ganaron sobre un capital de USD 1000, la tasa efectiva es
+
+$$
+\frac{100}{1000}
+=
+0.10
+=
+10\%.
+$$
+
+Pero si se ganaron sobre un capital de USD 10000, la tasa es
+
+$$
+\frac{100}{10000}
+=
+0.01
+=
+1\%.
+$$
+
+El interés en dinero es el mismo en los dos casos; el rendimiento, en cambio, es diez veces distinto.
+
+::: {.callout-warning title="Advertencia" icon=false}
+No hay que confundir el interés con la tasa de interés: el interés es una cantidad de dinero; la tasa de interés es una proporción respecto al capital expuesto y suele expresarse como porcentaje.
+:::
+
+## Función de acumulación
+
+La función de acumulación es uno de los objetos centrales de la matemática financiera actuarial. Describe cómo evoluciona una unidad monetaria invertida en una fecha inicial, y de ella salen los factores de acumulación y de descuento, las tasas equivalentes y, más adelante, la valoración de flujos de caja, anualidades, préstamos, bonos, primas y reservas.
+
+::: {.callout-note title="Definición. Función de acumulación" icon=false}
+Una **función de acumulación** es una función positiva
+
+$$
+a:[0,\infty)\longrightarrow (0,\infty)
+$$
+
+normalizada por
+
+$$
+a(0)=1.
+$$
+
+Suponemos además que es continua por la derecha:
+
+$$
+\lim_{h\downarrow 0}a(t+h)=a(t),
+\qquad t\ge 0.
+$$
+
+Cuando el modelo financiero supone tasas de interés no negativas, la función de acumulación es además no decreciente:
+
+$$
+a(s)\le a(t),
+\qquad 0\le s\le t.
+$$
+
+Esta última condición expresa que una unidad monetaria no pierde valor por efecto de la ley de acumulación considerada. No se impondrá cuando el modelo admita tasas negativas.
+:::
+
+La normalización $a(0)=1$ dice que una unidad monetaria invertida en el tiempo $0$ vale exactamente una unidad en ese mismo instante. La positividad nos asegura que los factores financieros que construiremos después estén bien definidos.
+
+La continuidad por la derecha nos deja modelar cuentas que acreditan rendimientos en instantes específicos; no exige que $a(t)$ sea continua en todo punto.
+
+::: {.callout-tip title="Una función de acumulación con saltos" icon=false}
+Suponga que una cuenta acredita una tasa efectiva $i>0$ únicamente al finalizar cada año. Una posible función de acumulación es
+
+$$
+a(t)
+=
+(1+i)^{\lfloor t\rfloor},
+$$
+
+donde $\lfloor t\rfloor$ representa la parte entera de $t$.
+
+Así,
+
+$$
+a(t)
+=
+\begin{cases}
+1, & 0\le t<1,\\[4pt]
+1+i, & 1\le t<2,\\[4pt]
+(1+i)^2, & 2\le t<3,\\
+\vdots &
+\end{cases}
+$$
+
+Hay saltos en los tiempos enteros, pero la función es continua por la derecha: una vez se acredita el interés en el instante $t$, ese nuevo valor es el que rige inmediatamente después.
+:::
+
+Si un capital inicial $C>0$ se invierte en el tiempo $0$, el monto acumulado al tiempo $t$ se obtiene como
+
+$$
+A(t)=C\,a(t).
+$$
+
+Entonces $a(t)$ recoge la ley financiera de acumulación, y el capital $C$ solo fija la escala monetaria de la operación.
+
+::: {.callout-tip title="Tasas negativas" icon=false}
+La palabra *acumulación* no implica necesariamente crecimiento. Si se admite una tasa efectiva negativa $-1<i<0$, bajo interés compuesto se tiene
+
+$$
+a(t)=(1+i)^t.
+$$
+
+La función continúa siendo positiva, pero es decreciente. Por ejemplo, si $i=-0.02$,
+
+$$
+a(t)=(0.98)^t.
+$$
+
+Aquí, para $s<t$ puede pasar que $a(t)<a(s)$ y, por tanto, que el factor financiero entre ambas fechas sea menor que uno.
+:::
+
+### Factor de acumulación entre dos tiempos
+
+La normalización $a(0)=1$ nos permite leer $a(t)$ como el valor en $t$ de una unidad invertida en $0$. Pero muchas operaciones no empiezan en el origen. Si un capital ya está valorado en el tiempo $s$ y queremos llevarlo a un tiempo posterior $t$, con $0\le s\le t$, necesitamos el **factor de acumulación entre $s$ y $t$**.
+
+Sea $A(s)$ el monto disponible en el tiempo $s$ y $A(t)$ su equivalente en el tiempo $t$. Como los dos provienen de la misma ley de acumulación,
+
+$$
+A(s)=C\,a(s)
+$$
+
+y
+
+$$
+A(t)=C\,a(t).
+$$
+
+Dividiendo las dos expresiones,
+
+$$
+\frac{A(t)}{A(s)}
+=
+\frac{a(t)}{a(s)}.
+$$
+
+::: {.callout-note title="Definición. Factor de acumulación entre dos tiempos" icon=false}
+El **factor de acumulación entre los tiempos $s$ y $t$** se define por
+
+$$
+a(s,t)
+=
+\frac{a(t)}{a(s)},
+$$
+
+con lo cual
+
+$$
+A(t)
+=
+A(s)a(s,t).
+$$
+:::
+
+Fíjese que la expresión separa dos cosas: $A(s)$ es el capital disponible al comienzo de la operación y $a(s,t)$ es exclusivamente el efecto financiero de trasladar ese capital entre $s$ y $t$.
+
+La tasa efectiva del intervalo $[s,t]$, que definimos a partir del capital expuesto en $s$, se escribe directamente con el factor de acumulación:
+
+$$
+\begin{aligned}
+i_{[s,t]}
+&=
+\frac{A(t)-A(s)}{A(s)}\\
+&=
+\frac{A(t)}{A(s)}-1\\
+&=
+a(s,t)-1.
+\end{aligned}
+$$
+
+Entonces,
+
+$$
+a(s,t)=1+i_{[s,t]}.
+$$
+
+Cuando $t>s$ también podemos construir una tasa efectiva anual equivalente para el intervalo: la tasa constante $i_{\mathrm{eq},[s,t]}$ que, aplicada durante $t-s$ años, reproduce el mismo factor total:
+
+$$
+\left(1+i_{\mathrm{eq},[s,t]}\right)^{t-s}
+=
+a(s,t).
+$$
+
+Despejando,
+
+$$
+i_{\mathrm{eq},[s,t]}
+=
+a(s,t)^{1/(t-s)}-1.
+$$
+
+Así, $i_{[s,t]}$ mide el crecimiento de todo el intervalo, mientras que $i_{\mathrm{eq},[s,t]}$ expresa ese mismo crecimiento sobre una base anual compuesta. Solo coinciden cuando el intervalo dura un año.
+
+El factor general cumple tres propiedades básicas:
+
+$$
+a(t,t)=1,
+$$
+
+$$
+a(0,t)=a(t),
+$$
+
+y, para $0\le r\le s\le t$,
+
+$$
+a(r,t)
+=
+a(r,s)a(s,t).
+$$
+
+La última identidad es la **consistencia temporal**: llevar un capital directamente de $r$ a $t$ debe dar lo mismo que llevarlo primero de $r$ a $s$ y luego de $s$ a $t$.
+
+Bajo interés compuesto con tasa efectiva constante $i$,
+
+$$
+a(t)=(1+i)^t,
+$$
+
+de modo que
+
+$$
+a(s,t)
+=
+\frac{(1+i)^t}{(1+i)^s}
+=
+(1+i)^{t-s}.
+$$
+
+Vea que el factor depende solo de la longitud $t-s$ del intervalo.
+
+En cambio, bajo interés simple,
+
+$$
+a(t)=1+it,
+$$
+
+y, por tanto,
+
+$$
+a(s,t)
+=
+\frac{1+it}{1+is}.
+$$
+
+En general,
+
+$$
+\frac{1+it}{1+is}
+\neq
+1+i(t-s).
+$$
+
+Esta diferencia nos dice que no toda ley de acumulación es homogénea en el tiempo. Con interés simple, la acumulación entre dos fechas de una operación iniciada en $0$ depende de dónde caen esas fechas dentro del horizonte original; con interés compuesto de tasa constante, depende solo de la duración del intervalo.
+
+No hay que confundir esto con un **nuevo contrato** que arranca en $s$ y reinicia allí el reloj del interés simple. Si esa nueva operación dura $t-s$ años y se pacta una tasa simple $i$, su factor local es
+
+$$
+1+i(t-s).
+$$
+
+En cambio, si queremos seguir valorando en $s$ una operación cuya función original es
+
+$$
+a(t)=1+it,
+$$
+
+el factor coherente es
+
+$$
+\frac{1+it}{1+is}.
+$$
+
+::: {.callout-warning title="Advertencia. No confundir a(s,t) con a(t-s)" icon=false}
+No se debe sustituir automáticamente $a(s,t)$ por $a(t-s)$. Esa igualdad vale en modelos homogéneos en el tiempo, como el interés compuesto con tasa efectiva constante, pero no para una función de acumulación general.
+
+Antes de trasladar un pago, identifique si está continuando una ley financiera existente o si comienza una nueva operación con su propio origen temporal.
+:::
+
+La forma concreta de $a(t)$ depende del modelo financiero. Veamos primero los dos clásicos: interés simple e interés compuesto.
+
+## Interés simple
+
+::: {.callout-note title="Definición. Interés simple" icon=false}
+Con interés simple, los intereses se calculan siempre sobre el capital inicial: los que se generan en periodos anteriores no se incorporan al capital ni producen nuevos intereses.
+
+Si $C$ es el capital inicial, $i$ es una tasa simple anual y $t$ es el tiempo medido en años, el interés ganado es
+
+$$
+I=Cit.
+$$
+
+Entonces, el monto acumulado es
+
+$$
+A(t)=C+Cit=C(1+it),
+$$
+
+y la función de acumulación bajo interés simple es
+
+$$
+a(t)=1+it,
+\qquad t\ge 0.
+$$
+:::
+
+::: {.callout-tip title="Ejemplo. Una inversión de corto plazo" icon=false}
+La aseguradora donde trabaja Paola tiene COP 120 000 000 de excedentes de tesorería que no necesitará durante 270 días. Paola los coloca en una operación a una tasa de interés simple anual del $10.50\%$, con un año comercial de 360 días.
+
+El plazo expresado en años es
+
+$$
+t
+=
+\frac{270}{360}
+=
+0.75.
+$$
+
+Bajo interés simple, el interés generado es
+
+$$
+\begin{aligned}
+I
+&=
+Cit\\
+&=
+120\,000\,000(0.105)(0.75)\\
+&=
+9\,450\,000.
+\end{aligned}
+$$
+
+Entonces, el monto acumulado al finalizar los 270 días es
+
+$$
+\begin{aligned}
+A(0.75)
+&=
+C(1+it)\\
+&=
+120\,000\,000
+\left[
+1+(0.105)(0.75)
+\right]\\
+&=
+129\,450\,000.
+\end{aligned}
+$$
+
+La inversión genera **COP 9 450 000** de interés y alcanza un monto de **COP 129 450 000**.
+
+Este es un uso natural del interés simple: una operación de corto plazo en la que los intereses se calculan solo sobre el capital inicial. Convertir los 270 días en una fracción de año depende de la convención adoptada; lo precisaremos más adelante, al estudiar el conteo de días.
+:::
+
+El interés simple aparece en operaciones de corto plazo, en cálculos comerciales elementales y en contratos donde se pacta expresamente que los intereses no se capitalizan. En actuaría también sirve como convención auxiliar para aproximar intereses en fracciones cortas de año, siempre que la metodología lo indique.
+
+Su gran limitación es que no es multiplicativo en el tiempo. En general,
+
+$$
+a(s+t)\ne a(s)a(t).
+$$
+
+En efecto,
+
+$$
+a(s+t)=1+i(s+t),
+$$
+
+mientras que
+
+$$
+a(s)a(t)
+=
+(1+is)(1+it)
+=
+1+i(s+t)+i^2st.
+$$
+
+La diferencia es el término $i^2st$. Por eso, con interés simple, partir una inversión en tramos y reinvertir el saldo puede dar un resultado distinto al de mantener la inversión original durante todo el horizonte.
+
+::: {.callout-tip title="Ejemplo. Reinversión bajo interés simple" icon=false}
+A Paola le ofrecen invertir USD 1000 al 10 % simple anual durante 2 años.
+
+Si mantiene la inversión durante los 2 años completos:
+
+$$
+A(2) = 1\,000(1 + 0.10 \cdot 2) = 1\,200.
+$$
+
+Si en cambio invierte durante 1 año, retira el monto acumulado y lo reinvierte durante 1 año adicional:
+
+$$
+A(1) = 1\,000(1.10) = 1\,100,
+$$
+
+$$
+A(2) = 1\,100(1.10) = 1\,210.
+$$
+:::
+
+La reinversión produce USD 10 adicionales: con interés simple, el inversionista gana más si fracciona el horizonte y reinvierte. Esto nos dice que, en plazos largos, el interés simple no es internamente consistente como modelo de acumulación, pues la misma tasa da resultados distintos según cómo se fraccione el plazo. Con interés compuesto ambas estrategias darían exactamente lo mismo, gracias a la propiedad multiplicativa.
+
+Hay otro detalle: aunque la tasa simple $i$ sea constante, la tasa efectiva del periodo $n$ no lo es. Para periodos anuales enteros,
+
+$$
+i_n
+=
+\frac{a(n)-a(n-1)}{a(n-1)}
+=
+\frac{i}{1+i(n-1)}.
+$$
+
+Esta tasa efectiva por periodo disminuye a medida que $n$ crece, siempre que $i>0$, y por eso el interés simple no es la convención natural para valoraciones actuariales de largo plazo.
+
+::: {.callout-tip title="Idea clave" icon=false}
+El interés simple sirve como convención de corto plazo, pero no mantiene una misma tasa efectiva por periodo cuando el horizonte se alarga.
+:::
+
+### Convenciones de conteo de días
+
+En la práctica, el tiempo $t$ de la fórmula de interés simple no es sin más una "fracción de año": depende de la **convención de conteo de días** (*day count convention*) que se pacte en el contrato. Las más comunes son:
+
+| Convención | Fracción de año |
+|---|---|
+| Actual/365 | $\dfrac{\text{días reales}}{365}$ |
+| Actual/360 | $\dfrac{\text{días reales}}{360}$ |
+| 30/360, según la variante contractual | $\dfrac{360(Y_2-Y_1)+30(M_2-M_1)+(D_2-D_1)}{360}$, con los ajustes de días que correspondan |
+
+La convención Actual/360 se usa en diversos instrumentos del mercado monetario; las convenciones de la familia 30/360, en muchos bonos corporativos; y Actual/365 es común en mercados del Reino Unido y en algunos cálculos actuariales. En 30/360 existen variantes contractuales —por ejemplo, 30/360 US y 30E/360— que difieren en las reglas utilizadas para ajustar los días inicial y final; por ello, la fórmula debe interpretarse junto con la convención específica del instrumento.
+
+::: {.callout-note title="En Colombia: DTF e IBR" icon=false}
+Las dos tasas de referencia más conocidas del mercado colombiano usan convenciones distintas. La **DTF**, que el Banco de la República calcula cada semana como el promedio ponderado de las tasas de captación de los CDT a 90 días, se publica como tasa efectiva anual con base 365.[^dtf] El **IBR**, la tasa de referencia de corto plazo del mercado interbancario, se cotiza en términos nominales con base 360 y se liquida con los días calendario reales del periodo, es decir, en Actual/360.[^ibr]
+
+Un crédito atado al IBR y un CDT atado a la DTF no se pueden comparar sin antes llevar las dos tasas a la misma convención.
+:::
+
+[^dtf]: Banco de la República, «¿Cuál es la metodología de cálculo de la DTF y la normativa relacionada?»: <https://banrep.gov.co/es/cual-metodologia-calculo-dtf-y-normativa-relacionada>.
+
+[^ibr]: Banco de la República, glosario «Indicador bancario de referencia (IBR)»: <https://banrep.gov.co/glosario/indicador-bancario-referencia-ibr>, y *Manual de uso del IBR*: <https://www.banrep.gov.co/sites/default/files/reglamentacion/archivos/ibr-manual-uso.pdf>.
+
+El interés devengado entre dos fechas bajo interés simple y convención Actual/360 es
+
+$$
+I = C \cdot i \cdot \frac{\text{días reales}}{360}.
+$$
+
+::: {.callout-note title="Interpretación actuarial. Interés acumulado de bonos" icon=false}
+Uno de los usos más importantes del interés simple en las finanzas modernas está en la valoración de bonos entre fechas de cupón. Cuando un actuario calcula el **interés acumulado** (*accrued interest*) desde la última fecha de cupón hasta la fecha de liquidación, la convención de conteo de días es determinante: el mismo bono puede arrojar valores distintos según la convención que se use.
+
+El interés acumulado se calcula con interés simple sobre el cupón del periodo:
+
+$$
+\text{Interés acumulado} = C_{\text{cupón}} \times \frac{t}{T},
+$$
+
+donde $t$ es el tiempo transcurrido desde el último cupón y $T$ es la duración total del periodo de cupón. El **precio sucio** (*dirty price*) que el comprador paga es la suma del precio limpio (*clean price*) y el interés acumulado.
+
+Volveremos sobre esto en el capítulo de bonos. Se usa interés simple para esta fracción de periodo por una razón contractual: el mercado de renta fija adoptó la convención por simplicidad operativa, y quien valora portafolios de bonos tiene que respetarla.
+:::
+
+::: {.callout-tip title="Ejemplo. Tasa simple implícita en una inversión de corto plazo" icon=false}
+Paola deposita COP 75 000 000 de sus ahorros en una operación de corto plazo. Después de 210 días recibe COP 79 265 625. La operación utiliza interés simple y la convención Actual/360.
+
+Determine:
+
+1. la tasa simple anual implícita en la operación;
+2. el interés generado;
+3. el monto que habría recibido si el plazo hubiera sido de 270 días bajo la misma tasa.
+
+El interés generado durante los 210 días es
+
+$$
+I
+=
+79\,265\,625-75\,000\,000
+=
+4\,265\,625.
+$$
+
+Bajo interés simple,
+
+$$
+I=Cit.
+$$
+
+Como la convención es Actual/360,
+
+$$
+t
+=
+\frac{210}{360}
+=
+\frac{7}{12}.
+$$
+
+Así,
+
+$$
+4\,265\,625
+=
+75\,000\,000
+\cdot i
+\cdot
+\frac{210}{360}.
+$$
+
+Despejando la tasa,
+
+$$
+\begin{aligned}
+i
+&=
+\frac{4\,265\,625}
+{75\,000\,000(210/360)}\\
+&=
+0.0975.
+\end{aligned}
+$$
+
+La tasa simple anual implícita es, por tanto,
+
+$$
+\boxed{i=9.75\%}.
+$$
+
+Ahora supóngase que la inversión hubiera permanecido durante 270 días bajo la misma tasa. El nuevo plazo sería
+
+$$
+t
+=
+\frac{270}{360}
+=
+0.75.
+$$
+
+El monto acumulado sería
+
+$$
+\begin{aligned}
+A(0.75)
+&=
+75\,000\,000
+\left[
+1+(0.0975)(0.75)
+\right]\\
+&=
+80\,484\,375.
+\end{aligned}
+$$
+
+Así, al cabo de 270 días Paola habría recibido
+
+$$
+\boxed{\text{COP }80\,484\,375}.
+$$
+
+Lo importante aquí es fijar bien la base temporal antes de despejar la tasa. Con Actual/360, los 210 días son $210/360$ de año, no $210/365$.
+
+Y recuerde que la tasa obtenida es una **tasa simple anual**, no una tasa efectiva anual compuesta, porque la ley financiera utilizada es
+
+$$
+a(t)=1+it.
+$$
+:::
+
+
+## Interés compuesto
+
+::: {.callout-note title="Definición. Interés compuesto" icon=false}
+Con interés compuesto, los intereses generados se incorporan al capital y empiezan a producir nuevos intereses; por eso la base sobre la cual se calcula el interés cambia en cada periodo.
+
+Si $C$ es el capital inicial e $i$ es la tasa efectiva por periodo, la evolución del monto satisface la relación recursiva
+
+$$
+A(n+1)=A(n)(1+i),
+$$
+
+con condición inicial $A(0)=C$.
+:::
+
+Después de un periodo,
+
+$$
+A(1)=C(1+i).
+$$
+
+Después de dos periodos,
+
+$$
+A(2)=A(1)(1+i)=C(1+i)^2.
+$$
+
+Después de tres periodos,
+
+$$
+A(3)=A(2)(1+i)=C(1+i)^3.
+$$
+
+Claramente se observa el patrón: cada periodo nuevo agrega un factor $1+i$. Entonces, para $n\in\mathbb{N}$,
+
+$$
+A(n)=C(1+i)^n.
+$$
+
+Esta fórmula vale cuando el número de periodos es entero, pero en la práctica también hay que valorar operaciones con plazos que no lo son.
+
+::: {.callout-important title="Resultado. Modelo compuesto para tiempos reales" icon=false}
+Para $1+i>0$, el modelo compuesto se extiende a tiempos reales mediante
+
+$$
+A(t)=C(1+i)^t,\qquad t\ge 0.
+$$
+
+Entonces, la función de acumulación bajo interés compuesto es
+
+$$
+a(t)=(1+i)^t.
+$$
+
+Esta extensión está bien definida porque
+
+$$
+(1+i)^t=e^{t\ln(1+i)}.
+$$
+:::
+
+::: {.callout-tip title="Ejemplo. Acumulación de un capital bajo interés compuesto" icon=false}
+Paola invierte COP 10 000 000 durante tres años en un producto que reconoce una tasa efectiva anual (E.A.) del $8\%$ y capitaliza los intereses al final de cada año.
+
+Al finalizar el primer año,
+
+$$
+A(1)
+=
+10\,000\,000(1.08)
+=
+10\,800\,000.
+$$
+
+Durante el segundo año, el interés ya no se calcula sobre los COP 10 000 000 iniciales, sino sobre el saldo acumulado de COP 10 800 000:
+
+$$
+A(2)
+=
+10\,800\,000(1.08)
+=
+11\,664\,000.
+$$
+
+De forma equivalente,
+
+$$
+A(2)
+=
+10\,000\,000(1.08)^2.
+$$
+
+Al finalizar el tercer año,
+
+$$
+\begin{aligned}
+A(3)
+&=
+11\,664\,000(1.08)\\
+&=
+10\,000\,000(1.08)^3\\
+&=
+12\,597\,120.
+\end{aligned}
+$$
+
+Así, el interés total generado durante los tres años es
+
+$$
+\begin{aligned}
+I
+&=
+A(3)-A(0)\\
+&=
+12\,597\,120-10\,000\,000\\
+&=
+2\,597\,120.
+\end{aligned}
+$$
+
+El monto final es **COP 12 597 120** y el interés acumulado es **COP 2 597 120**.
+
+Aquí se ve lo esencial del interés compuesto: al final de cada periodo los intereses se suman al capital y pasan a ser parte de la base sobre la cual se generan los intereses del periodo siguiente.
+:::
+
+Con interés compuesto se cumple la propiedad multiplicativa, y se verifica directamente:
+
+$$
+(1+i)^{s+t}
+=
+(1+i)^s(1+i)^t.
+$$
+
+Es decir,
+
+$$
+a(s+t)=a(s)a(t).
+$$
+
+Por esta propiedad el interés compuesto será la convención principal del libro, salvo que se indique lo contrario.
+
+::: {.callout-important title="Convención del libro" icon=false}
+Salvo que se diga lo contrario, las tasas de interés son efectivas bajo interés compuesto. Cuando usemos interés simple, tasa nominal, tasa de descuento o fuerza de interés, lo indicaremos expresamente.
+:::
+
+::: {.callout-tip title="Ejemplo. Tasa efectiva a partir de saldos observados" icon=false}
+Hace unos años Paola abrió una cuenta en una cooperativa de ahorro que reconoce una tasa efectiva anual constante, y desde la apertura no ha hecho depósitos ni retiros. En el extracto del segundo año el saldo era de COP 4 800 000 y en el del quinto año, de COP 5 399 347.20.
+
+Paola quiere saber qué tasa efectiva anual le está reconociendo la cooperativa y cuánto interés le generará la cuenta, en conjunto, durante el octavo y el noveno años posteriores a la apertura.
+
+Entre los tiempos $2$ y $5$ transcurren tres años. Entonces,
+
+$$
+5\,399\,347.20
+=
+4\,800\,000(1+i)^3.
+$$
+
+Al despejar $i$,
+
+$$
+\begin{aligned}
+i
+&=
+\left(\frac{5\,399\,347.20}{4\,800\,000}\right)^{1/3}-1\\
+&=0.04.
+\end{aligned}
+$$
+
+La cuenta reconoce una tasa efectiva anual del $4\%$.
+
+El octavo año corresponde al intervalo $[7,8]$ y el noveno al intervalo $[8,9]$. El interés conjunto de ambos años es, entonces, la diferencia entre los saldos en $t=9$ y $t=7$. Tomando como referencia el saldo conocido en $t=2$,
+
+$$
+A(7)=4\,800\,000(1.04)^5
+\approx 5\,839\,933.93,
+$$
+
+$$
+A(9)=4\,800\,000(1.04)^7
+\approx 6\,316\,472.54.
+$$
+
+De aquí,
+
+$$
+\begin{aligned}
+I_{[7,9]}
+&=A(9)-A(7)\\
+&\approx
+6\,316\,472.54-5\,839\,933.93\\
+&=476\,538.61.
+\end{aligned}
+$$
+
+El interés generado en conjunto durante el octavo y el noveno años es aproximadamente **COP 476 538.61**. La parte delicada no es despejar la tasa, sino identificar bien los tres años que separan los saldos observados y el intervalo $[7,9]$ que corresponde a los años pedidos.
+:::
+
+::: {.callout-tip title="Ejemplo. Valores futuro y presente bajo interés compuesto" icon=false}
+Paola tiene USD 1000 en una cuenta en dólares que reconoce una tasa efectiva anual del 6 % y no piensa tocarlos durante 4 años. Además, la aseguradora le pagará una bonificación cierta de USD 1500 al final de ese mismo plazo, y Paola quiere saber cuánto vale hoy.
+
+El valor futuro de la inversión es
+
+$$
+\begin{aligned}
+FV
+&=1000(1+0.06)^4\\
+&\approx 1262.48.
+\end{aligned}
+$$
+
+Para hacer el camino inverso usamos el factor recíproco. El valor presente del pago futuro es
+
+$$
+\begin{aligned}
+PV
+&=1500(1+0.06)^{-4}\\
+&=\frac{1500}{(1.06)^4}\\
+&\approx 1188.14.
+\end{aligned}
+$$
+:::
+
+La acumulación lleva el dinero a una fecha posterior con $(1+i)^t$; el descuento hace el recorrido inverso con $(1+i)^{-t}$. Antes de formalizar el factor de descuento, verifiquemos ambos cálculos en R.
+
+### Implementación con `tidyactuarial`
+
+Las funciones `future_value()` y `present_value()` trasladan un pago cierto hacia adelante o hacia atrás en el tiempo. Ambas admiten las cuatro especificaciones de tasa de `tidyactuarial` —efectiva, nominal de interés, nominal de descuento y fuerza de interés—; internamente, la tasa que usted suministra se convierte a su equivalente efectivo anual antes de valorar.
+
+::: {.callout-note title="Funciones tidyactuarial: future_value() y present_value()" icon=false}
+Las dos funciones comparten la misma estructura de argumentos:
+
+```r
+future_value(
+  C,
+  i,
+  i_type = "effective",
+  m = 1,
+  t,
+  tidy = FALSE
+)
+
+present_value(
+  C,
+  i,
+  i_type = "effective",
+  m = 1,
+  t,
+  tidy = FALSE
+)
+```
+
+Su diferencia fundamental está en la dirección del traslado financiero:
+
+| Función | Magnitud de entrada `C` | Operación | Resultado |
+|---|---|---|---|
+| `future_value()` | Capital o pago ubicado en la fecha inicial | Acumula hacia adelante | Valor futuro |
+| `present_value()` | Pago o capital ubicado en la fecha futura | Descuenta hacia atrás | Valor presente |
+
+Los parámetros restantes tienen el mismo significado en ambas funciones:
+
+| Argumento | Condición | Significado |
+|---|---|---|
+| `C` | Obligatorio | Cantidad monetaria que se desea trasladar. Su ubicación temporal depende de la función utilizada. |
+| `i` | Obligatorio | Valor de la tasa suministrada. |
+| `t` | Obligatorio | Distancia temporal, expresada en años, entre la fecha inicial y la fecha final. |
+| `i_type` | Opcional | Tipo de tasa: `"effective"`, `"nominal_interest"`, `"nominal_discount"` o `"force"`. Por defecto, `"effective"`. |
+| `m` | Opcional | Frecuencia de conversión de las tasas nominales. Por defecto, `1`; se ignora para tasas efectivas y fuerzas de interés. |
+| `tidy` | Opcional | Controla si la salida es un vector numérico o una tibble con información intermedia del cálculo. |
+
+**Vectorización.** `C`, `i`, `i_type`, `m` y `t` pueden tener longitud $1$ o una longitud común. Los argumentos escalares se reciclan sobre los demás escenarios y los valores faltantes se propagan.
+
+**Salida.** Con `tidy = FALSE`, ambas funciones devuelven un vector numérico con el valor trasladado. Con `tidy = TRUE`, devuelven una tibble que conserva las entradas y presenta las cantidades intermedias utilizadas en la valoración.
+
+**Alcance.** Ambas funciones trabajan con tiempos numéricos expresados en años. Para flujos definidos mediante fechas de calendario se utilizan `fv_flow()` y `pv_flow()`, respectivamente.
+:::
+
+En el ejemplo anterior la tasa es efectiva anual, así que basta con dar `C`, `i` y `t`; los demás argumentos quedan en sus valores por defecto.
+
+```{r}
+#| label: future-present-value-interes-compuesto
+
+capital_hoy <- 1000     # capital invertido hoy (USD)
+monto_futuro <- 1500    # pago cierto que se recibe al final del plazo (USD)
+tasa_efectiva <- 0.06   # tasa efectiva anual
+plazo <- 4              # plazo, en años
+
+fv_paquete <- future_value(
+  C = capital_hoy,      # capital que se acumula hacia adelante
+  i = tasa_efectiva,    # tasa efectiva anual
+  t = plazo             # plazo, en años
+)
+
+pv_paquete <- present_value(
+  C = monto_futuro,     # pago futuro que se descuenta hacia hoy
+  i = tasa_efectiva,    # tasa efectiva anual
+  t = plazo             # plazo, en años
+)
+```
+
+```{r}
+#| label: auditoria-future-present-value-interes-compuesto
+#| echo: false
+#| results: asis
+
+tabla_comparacion(
+  tibble::tibble(
+    magnitud = c("Valor futuro", "Valor presente"),
+    analitico = c(
+      capital_hoy * (1 + tasa_efectiva)^plazo,
+      monto_futuro * (1 + tasa_efectiva)^(-plazo)
+    ),
+    tidyactuarial = c(fv_paquete, pv_paquete)
+  ),
+  titulo = "Auditoría de valores futuro y presente",
+  digits = 2
+)
+```
+
+La auditoría pone lado a lado el desarrollo matemático y los valores de `tidyactuarial`.
+
+## Factor de descuento y valor presente
+
+La acumulación responde a la pregunta ¿cuánto valdrá en el futuro un capital que tengo en una fecha anterior? El descuento responde la inversa: ¿qué valor le asigno, en una fecha anterior, a un pago que ocurre después?
+
+::: {.callout-note title="Definición. Factor de descuento" icon=false}
+Si $a(s,t)$ es el factor de acumulación entre los tiempos $s$ y $t$, el **factor de descuento desde $t$ hasta $s$** se define como
+
+$$
+v(s,t)
+=
+\frac{1}{a(s,t)}
+=
+\frac{a(s)}{a(t)}.
+$$
+
+Entonces, si $A(t)$ es un monto ubicado en el tiempo $t$, su valor equivalente en el tiempo $s$ es
+
+$$
+A(s)
+=
+A(t)v(s,t).
+$$
+:::
+
+Los factores de acumulación y descuento son inversos:
+
+$$
+a(s,t)v(s,t)=1.
+$$
+
+Además, para $0\le r\le s\le t$,
+
+$$
+v(r,t)
+=
+v(r,s)v(s,t).
+$$
+
+Gracias a esta propiedad podemos descontar directamente desde $t$ hasta $r$ o hacerlo por etapas, sin alterar el valor equivalente.
+
+**Con interés compuesto de tasa efectiva constante $i$**, el factor de acumulación depende solo de la longitud del intervalo:
+
+$$
+a(s,t)=(1+i)^{t-s},
+$$
+
+y, en consecuencia,
+
+$$
+v(s,t)=(1+i)^{-(t-s)}.
+$$
+
+Esta forma exponencial no se puede trasladar sin más a una función de acumulación general; en ese caso hay que usar la definición
+
+$$
+v(s,t)=\frac{a(s)}{a(t)}.
+$$
+
+Cuando $s=0$ y el intervalo dura un periodo, obtenemos el factor de descuento habitual
+
+$$
+v=v(0,1)=\frac{1}{1+i}.
+$$
+
+Para un pago unitario ubicado dentro de $t$ periodos,
+
+$$
+v(0,t)=v^t=(1+i)^{-t}.
+$$
+
+Sea $FV$ un pago cierto que ocurre al tiempo $t$. Su valor presente bajo interés compuesto es
+
+$$
+PV=FVv^t=FV(1+i)^{-t}.
+$$
+
+De forma equivalente, si se invierte $PV$ hoy, su valor futuro al tiempo $t$ será
+
+$$
+FV=PV(1+i)^t.
+$$
+
+Este principio nos acompañará todo el libro: en los capítulos siguientes no descontaremos solo pagos únicos, sino flujos de caja completos y beneficios contingentes.
+
+::: {.callout-note title="Interpretación de mercado" icon=false}
+El factor de descuento $v^t$ se puede leer como el precio hoy de un instrumento financiero que paga exactamente 1 unidad monetaria en el tiempo $t$ y nada antes. A ese instrumento se le llama **bono cupón cero** (*zero-coupon bond*). Si la tasa efectiva anual es $i$, entonces
+
+$$
+P(0,t)=v^t=(1+i)^{-t}
+$$
+
+representa el precio hoy del bono cupón cero con vencimiento en $t$.
+
+Cuando las tasas dependen del plazo, la colección de precios $P(0,t)$ determina la **curva de descuento**. De ella salen las tasas spot y, con ellas, la estructura temporal de tasas de interés, que estudiaremos en capítulos posteriores.
+
+En contingencias de vida, el factor de descuento financiero $v^t$ se combinará con una probabilidad de supervivencia ${}_tp_x$ para obtener cantidades de la forma
+
+$$
+v^t\,{}_tp_x.
+$$
+
+Esta idea anticipa una estructura que veremos más adelante: primero se determina cuándo puede ocurrir un pago y después se traslada financieramente a la fecha de valoración.
+:::
+
+### Factores más generales
+
+Hasta aquí hemos usado sobre todo el modelo compuesto con tasa constante, pero las definiciones de $a(s,t)$ y $v(s,t)$ sirven para leyes de acumulación mucho más generales.
+
+Las funciones `accumulation_factor()` y `discount_factor()` de `tidyactuarial` calculan directamente estos dos factores. En ambas usted indica el intervalo $[s,t]$ y **una sola ley financiera**, que puede darse mediante una tasa convencional, una función de acumulación o una fuerza de interés variable.
+
+::: {.callout-note title="Funciones tidyactuarial: accumulation_factor() y discount_factor()" icon=false}
+Las dos funciones comparten la misma estructura de argumentos:
+
+```r
+accumulation_factor(
+  s = 0,
+  t,
+  i = NULL,
+  i_type = "effective",
+  m = 1,
+  a = NULL,
+  delta = NULL,
+  subdivisions = 100L,
+  rel.tol = 1e-08,
+  tidy = FALSE
+)
+
+discount_factor(
+  s = 0,
+  t,
+  i = NULL,
+  i_type = "effective",
+  m = 1,
+  a = NULL,
+  delta = NULL,
+  subdivisions = 100L,
+  rel.tol = 1e-08,
+  tidy = FALSE
+)
+```
+
+Su diferencia fundamental está en la dirección del traslado financiero:
+
+| Función | Magnitud calculada | Interpretación |
+|---|---|---|
+| `accumulation_factor()` | $a(s,t)$ | Factor que traslada una unidad monetaria desde $s$ hasta $t$ |
+| `discount_factor()` | $v(s,t)$ | Factor que traslada una unidad monetaria desde $t$ hasta $s$ |
+
+Los parámetros tienen el mismo significado en ambas funciones:
+
+| Argumento | Condición | Significado |
+|---|---|---|
+| `s` | Opcional | Tiempo inicial del intervalo. Por defecto, `0`. Debe cumplirse $0\le s\le t$. |
+| `t` | Obligatorio | Tiempo final del intervalo, expresado en años. |
+| `i` | Condicional | Tasa convencional utilizada para especificar la ley financiera. |
+| `i_type` | Opcional | Tipo de tasa: `"effective"`, `"nominal_interest"`, `"nominal_discount"` o `"force"`. Solo se utiliza cuando se suministra `i`. |
+| `m` | Opcional | Frecuencia de conversión para tasas nominales. Solo se utiliza cuando se suministra `i`. |
+| `a` | Condicional | Función de acumulación $a(t)$ definida por el usuario. Debe producir valores positivos y finitos. |
+| `delta` | Condicional | Función de fuerza de interés $\delta(t)$. |
+| `subdivisions` | Opcional | Número máximo de subintervalos utilizados por `stats::integrate()` cuando se suministra `delta`. |
+| `rel.tol` | Opcional | Tolerancia relativa utilizada por `stats::integrate()` cuando se suministra `delta`. |
+| `tidy` | Opcional | Controla si la salida es un vector numérico o una tibble con información intermedia del cálculo. |
+
+Debe suministrarse **exactamente uno** de los argumentos `i`, `a` o `delta`. Estas tres opciones representan formas alternativas de especificar una misma ley financiera:
+
+- `i` describe la ley mediante una tasa convencional constante;
+- `a` proporciona directamente la función de acumulación;
+- `delta` describe la ley mediante una fuerza de interés que puede variar con el tiempo.
+
+Según la representación elegida, `accumulation_factor()` calcula
+
+$$
+a(s,t)
+=
+(1+i)^{t-s},
+$$
+
+$$
+a(s,t)
+=
+\frac{a(t)}{a(s)},
+$$
+
+o
+
+$$
+a(s,t)
+=
+\exp\left(
+\int_s^t \delta(u)\,du
+\right).
+$$
+
+La función `discount_factor()` construye el factor recíproco correspondiente:
+
+$$
+v(s,t)
+=
+(1+i)^{-(t-s)},
+$$
+
+$$
+v(s,t)
+=
+\frac{a(s)}{a(t)},
+$$
+
+o
+
+$$
+v(s,t)
+=
+\exp\left(
+-\int_s^t \delta(u)\,du
+\right).
+$$
+
+En todos los casos,
+
+$$
+a(s,t)v(s,t)=1.
+$$
+
+**Vectorización.** Los argumentos que describen los escenarios financieros —`s`, `t` y, cuando se utiliza una tasa convencional, `i`, `i_type` y `m`— pueden tener longitud $1$ o una longitud común. Los escalares se reciclan sobre los demás escenarios. Los argumentos `subdivisions`, `rel.tol` y `tidy` actúan como controles de cálculo.
+
+**Salida.** Con `tidy = FALSE`, las funciones devuelven un vector numérico; con `tidy = TRUE`, devuelven una tibble que conserva las entradas e incluye cantidades intermedias relevantes para la valoración.
+
+**Integración numérica.** Cuando la ley financiera se especifica mediante `delta`, la integral se evalúa numéricamente con `stats::integrate()` de forma independiente sobre cada intervalo. Por ello, pequeñas diferencias frente a un resultado analítico exacto pueden deberse únicamente a la tolerancia numérica.
+
+**Alcance.** Ambas funciones trabajan con tiempos numéricos expresados en años. Para factores derivados específicamente de una curva spot se utilizará `discount_factor_spot()`, que se estudiará en el capítulo dedicado a la estructura temporal de tasas.
+:::
+
+::: {.callout-tip title="Ejemplo. Factores derivados de una ley de acumulación" icon=false}
+Considere la ley financiera definida por
+
+$$
+a(t)
+=
+\exp\left(0.025t+0.0015t^2\right).
+$$
+
+Queremos los factores de acumulación y descuento entre los tiempos $1$ y $4$.
+
+Por definición,
+
+$$
+a(1,4)
+=
+\frac{a(4)}{a(1)}.
+$$
+
+Entonces,
+
+$$
+\begin{aligned}
+a(1,4)
+&=
+\exp\left[
+0.025(4-1)
++
+0.0015(4^2-1^2)
+\right]\\
+&=
+\exp(0.0975)\\
+&\approx
+1.1024.
+\end{aligned}
+$$
+
+El factor de descuento correspondiente es su recíproco:
+
+$$
+\begin{aligned}
+v(1,4)
+&=
+\frac{1}{a(1,4)}\\
+&=
+\exp(-0.0975)\\
+&\approx
+0.9071.
+\end{aligned}
+$$
+
+Los dos factores satisfacen
+
+$$
+a(1,4)v(1,4)=1,
+$$
+
+como exige la definición.
+:::
+
+En R le pasamos directamente la función $a(t)$.
+
+```{r}
+#| label: factores-generales-tidyactuarial-capitulo-01
+
+# La ley financiera es la función a(t) = exp(0.025 t + 0.0015 t^2)
+funcion_acumulacion <- function(t) {
+  exp(0.025 * t + 0.0015 * t^2)
+}
+
+factor_acumulacion_paquete <- accumulation_factor(
+  s = 1,                    # tiempo inicial del intervalo
+  t = 4,                    # tiempo final del intervalo
+  a = funcion_acumulacion   # ley financiera, dada como función a(t)
+)
+
+factor_descuento_paquete <- discount_factor(
+  s = 1,                    # el factor lleva valor de t = 4 a s = 1
+  t = 4,
+  a = funcion_acumulacion
+)
+```
+
+```{r}
+#| label: auditoria-factores-generales-tabla-capitulo-01
+#| echo: false
+#| results: asis
+
+factor_acumulacion_analitico <-
+  exp(0.0975)
+
+factor_descuento_analitico <-
+  exp(-0.0975)
+
+comparacion_factores <- tibble::tibble(
+  magnitud = c(
+    "Factor de acumulación a(1,4)",
+    "Factor de descuento v(1,4)"
+  ),
+  analitico = c(
+    factor_acumulacion_analitico,
+    factor_descuento_analitico
+  ),
+  tidyactuarial = c(
+    factor_acumulacion_paquete,
+    factor_descuento_paquete
+  )
+)
+
+comparacion_factores |>
+  tabla_comparacion(
+    digits = 4,
+    titulo = "Auditoría de los factores financieros entre los tiempos 1 y 4"
+  )
+```
+
+La auditoría contrasta dos cálculos independientes: el analítico, que usa directamente la definición de la ley financiera, y `tidyactuarial`, que recibe la función $a(t)$ y construye los factores.
+
+Interpretando: una unidad disponible en el tiempo $1$ equivale a aproximadamente $1.1024$ unidades en el tiempo $4$; y, al revés, una unidad pagadera en el tiempo $4$ equivale a aproximadamente $0.9071$ unidades en el tiempo $1$, bajo la misma ley financiera.
+
+Veamos la ley completa en una gráfica. La franja sombreada es el intervalo $[1,4]$, y el factor $a(1,4)$ es el cociente entre las alturas de la curva en sus dos extremos. Como $\ln a(t)=0.025t+0.0015t^2$ crece cada vez más rápido, la curva se empina con el tiempo: un intervalo de tres años ubicado más adelante produciría un factor mayor.
+
+```{r}
+#| label: fig-ley-acumulacion-capitulo-01
+#| fig-cap: "Ley de acumulación $a(t)=\\exp(0.025t+0.0015t^2)$ y los puntos que definen $a(1,4)$."
+
+# Malla de tiempos y valor acumulado de una unidad invertida en t = 0
+curva_acumulacion <- tibble::tibble(
+  t = seq(0, 6, by = 0.05),
+  a_t = funcion_acumulacion(t)
+)
+
+# Extremos del intervalo [1, 4]
+extremos_intervalo <- tibble::tibble(
+  t = c(1, 4),
+  a_t = funcion_acumulacion(t),
+  etiqueta = sprintf("a(%d) = %.4f", t, a_t)
+)
+
+ggplot2::ggplot(curva_acumulacion, ggplot2::aes(x = t, y = a_t)) +
+  ggplot2::annotate(
+    "rect",
+    xmin = 1, xmax = 4,               # intervalo que estamos trasladando
+    ymin = -Inf, ymax = Inf,
+    fill = "#1F4E79", alpha = 0.08
+  ) +
+  ggplot2::geom_line(linewidth = 0.9, colour = "#1F4E79") +
+  ggplot2::geom_point(
+    data = extremos_intervalo, size = 2.6, colour = "#B8860B"
+  ) +
+  ggplot2::geom_text(
+    data = extremos_intervalo,
+    ggplot2::aes(label = etiqueta),
+    nudge_x = -0.15, vjust = -0.9, hjust = 1, size = 3.4
+  ) +
+  ggplot2::labs(
+    x = "Tiempo t (años)",
+    y = "a(t)",
+    subtitle = sprintf(
+      "a(1,4) = a(4) / a(1) ≈ %.4f",
+      factor_acumulacion_paquete      # factor calculado con tidyactuarial
+    )
+  ) +
+  ggplot2::theme_minimal(base_size = 11) +
+  ggplot2::theme(panel.grid.minor = ggplot2::element_blank())
+```
+
+::: {.callout-note title="Factor financiero y valor monetario" icon=false}
+`accumulation_factor()` y `discount_factor()` calculan **factores financieros**; `future_value()` y `present_value()` aplican esos factores a **cantidades monetarias**.
+
+Esta distinción evita confundir la ley financiera con el capital al que se aplica.
+:::
+
+## Tasa efectiva de descuento
+
+La tasa efectiva de interés compara el interés del periodo con el valor inicial; la tasa efectiva de descuento compara ese mismo cambio con el valor final. Por esa diferencia de base las dos tasas no coinciden numéricamente, aunque describan la misma operación.
+
+::: {.callout-note title="Definición. Tasa efectiva de descuento" icon=false}
+Si $A(0)$ es el valor al inicio de un periodo y $A(1)$ su valor al final, la **tasa efectiva de descuento** del periodo es
+
+$$
+d=\frac{A(1)-A(0)}{A(1)}.
+$$
+
+La definición usa el valor final $A(1)$ como base de comparación.
+:::
+
+Con interés compuesto, $A(1)=A(0)(1+i)$. Por tanto,
+
+$$
+d
+=
+\frac{A(0)(1+i)-A(0)}{A(0)(1+i)}
+=
+\frac{i}{1+i}.
+$$
+
+Como $v=(1+i)^{-1}$, también se obtiene
+
+$$
+d=1-v,
+\qquad
+v=1-d.
+$$
+
+::: {.callout-important title="Identidades fundamentales" icon=false}
+Para una tasa efectiva de interés $i>0$, su tasa efectiva de descuento equivalente $d$ y el factor de descuento $v$ satisfacen
+
+$$
+d=iv,
+\qquad
+i-d=id,
+\qquad
+\frac{1}{d}-\frac{1}{i}=1.
+$$
+
+Son muy útiles para transformar expresiones y para verificar cálculos rápidamente.
+:::
+
+La primera identidad se obtiene de $d=i/(1+i)=iv$. A partir de ella,
+
+$$
+i-d
+=
+i-\frac{i}{1+i}
+=
+\frac{i^2}{1+i}
+=
+id.
+$$
+
+Si dividimos esta igualdad entre $id$ obtenemos la tercera identidad. En problemas tipo FM, estas relaciones sirven para detectar de inmediato una conversión inconsistente.
+
+### Descuento bancario simple
+
+No hay que confundir la **tasa efectiva de descuento** $d$, que acabamos de definir, con la **tasa de descuento bancario simple**, que denotaremos $d_b$.
+
+En un descuento bancario simple con valor nominal $F$, plazo de $t$ años y tasa anual $d_b$, el precio es
+
+$$
+P=F(1-d_b t).
+$$
+
+Aquí el descuento monetario,
+
+$$
+F-P=Fd_b t,
+$$
+
+se calcula sobre el **valor nominal o valor al vencimiento**. Por eso $d_b$ es una convención de cotización comercial y no debe sustituirse directamente por la tasa efectiva de descuento $d$.
+
+::: {.callout-warning title="Advertencia. No confundir d con d_b" icon=false}
+La tasa efectiva de descuento $d$ pertenece a la teoría de tasas equivalentes y satisface
+
+$$
+d=\frac{i}{1+i}.
+$$
+
+La tasa de descuento bancario simple $d_b$ aparece en expresiones de la forma
+
+$$
+P=F(1-d_b t).
+$$
+
+Aunque ambas usan como referencia un valor futuro, corresponden a convenciones financieras distintas.
+:::
+
+::: {.callout-tip title="Ejemplo. Valoración de una letra del Tesoro" icon=false}
+Una **letra del Tesoro** (*Treasury bill*) es un título de deuda de corto plazo que emite un gobierno y que no paga intereses periódicos. Su **valor nominal** es el monto fijo que el emisor se compromete a pagar en la fecha de vencimiento. El inversionista compra la letra hoy por un precio menor que ese valor nominal, y su ganancia es la diferencia entre lo que recibe al vencimiento y lo que pagó; por eso se dice que la letra se negocia *a descuento*.
+
+Para el portafolio en dólares de la aseguradora, Paola analiza una letra del Tesoro de Estados Unidos con valor nominal de USD 10 000, plazo de 180 días y tasa de descuento bancario del $4.80\%$, con la convención Actual/360. Si llamamos $d_b$ a esta tasa,
+
+$$
+d_b=0.048.
+$$
+
+El plazo, bajo la convención indicada, es
+
+$$
+t=\frac{180}{360}=0.5.
+$$
+
+Así, el precio es
+
+$$
+\begin{aligned}
+P
+&=
+10\,000(1-d_b t)\\
+&=
+10\,000\left(1-0.048\frac{180}{360}\right)\\
+&=
+9\,760.
+\end{aligned}
+$$
+
+La aseguradora paga USD 9 760 y recibe USD 10 000 al vencimiento. El descuento monetario es
+
+$$
+10\,000-9\,760=240,
+$$
+
+equivalente al $2.40\%$ del valor nominal durante los 180 días.
+
+El rendimiento efectivo del mismo intervalo, en cambio, se calcula sobre lo que la aseguradora desembolsó:
+
+$$
+\begin{aligned}
+i_{[0,180/360]}
+&=
+\frac{10\,000-9\,760}{9\,760}\\
+&\approx
+0.0246.
+\end{aligned}
+$$
+
+Así, el rendimiento efectivo del periodo es aproximadamente $2.46\%$.
+
+Por eso no se puede comparar directamente la tasa anual de descuento bancario $d_b=4.80\%$ con la tasa efectiva del intervalo: primero hay que respetar la convención de tiempo y llevar ambas cantidades a una base comparable.
+:::
+
+::: {.callout-note title="En Colombia: los TES de corto plazo" icon=false}
+El análogo colombiano de las letras del Tesoro son los **TES de corto plazo (TCO)** que subasta el Ministerio de Hacienda y Crédito Público. Son títulos en pesos emitidos a descuento, conformados únicamente por el principal —que se paga al final del plazo— y con vencimientos entre 30 días y un año.[^tco]
+
+La lógica es la del ejemplo: se paga hoy menos que el valor nominal y se recibe el valor nominal al vencimiento. Eso sí, la convención con la que se anuncia la tasa no tiene por qué ser el descuento bancario, así que antes de comparar hay que leer en qué términos está expresada.
+:::
+
+[^tco]: Ministerio de Hacienda y Crédito Público, Resolución 3609 de 2022, artículo 2, que define los TES de corto plazo: <https://vlex.com.co/vid/resolucion-numero-3609-2022-918145829>.
+
+## Tasas equivalentes
+
+::: {.callout-note title="Definición. Equivalencia financiera de tasas" icon=false}
+Sean $a_1(t)$ y $a_2(t)$ las funciones de acumulación asociadas a dos tasas expresadas, posiblemente, bajo convenciones diferentes. Las tasas son **financieramente equivalentes en el horizonte** $T>0$ si
+
+$$
+a_1(T)=a_2(T).
+$$
+
+Equivalentemente, producen el mismo monto al tiempo $T$ para cualquier capital inicial $C>0$:
+
+$$
+C\,a_1(T)=C\,a_2(T).
+$$
+
+Si la igualdad se cumple para todo $t\ge 0$, ambas expresiones son la misma ley financiera de acumulación.
+:::
+
+La equivalencia no depende del porcentaje anunciado ni del capital invertido, sino del efecto financiero en un horizonte común. Todas las fórmulas de conversión que siguen salen de imponer la igualdad entre factores de acumulación.
+
+### Tasa efectiva del subperiodo
+
+Sea $i$ una tasa efectiva anual y dividamos el año en $m$ subperiodos iguales. Si $j_m$ es la tasa efectiva de un subperiodo y consideramos interés compuesto, la equivalencia exige
+
+$$
+1+i=(1+j_m)^m.
+$$
+
+Luego,
+
+$$
+j_m=(1+i)^{1/m}-1.
+$$
+
+La tasa $j_m$ es la tasa **efectiva del subperiodo**. Por ejemplo, si $m=12$, $j_{12}$ es la tasa efectiva mensual equivalente a la efectiva anual $i$.
+
+### Tasa nominal anual de interés convertible $m$ veces
+
+La tasa nominal anual de interés convertible $m$ veces, que denotamos $i^{(m)}$, se define como $m$ veces la tasa efectiva del subperiodo:
+
+$$
+i^{(m)}
+=
+m j_m
+=
+m\left[(1+i)^{1/m}-1\right].
+$$
+
+Entonces,
+
+$$
+\frac{i^{(m)}}{m}
+=
+j_m.
+$$
+
+La tasa $i^{(m)}$ es una convención de cotización, no la rentabilidad efectiva anual. Para recuperar la efectiva anual equivalente:
+
+$$
+i
+=
+\left(1+\frac{i^{(m)}}{m}\right)^m-1.
+$$
+
+::: {.callout-warning title="Advertencia. Tasas nominales" icon=false}
+Una tasa nominal anual convertible $m$ veces no se usa directamente como tasa efectiva anual. Antes de acumular o descontar hay que identificar la frecuencia de conversión y recuperar la tasa efectiva del periodo de trabajo.
+:::
+
+::: {.callout-tip title="Ejemplo. Una APR con capitalización mensual" icon=false}
+Paola recibe la oferta de una tarjeta de crédito internacional que anuncia una **APR** (*annual percentage rate*) del $24\%$. El contrato la define como una tasa nominal anual convertible mensualmente.
+
+La tasa efectiva mensual es
+
+$$
+j_{12}
+=
+\frac{0.24}{12}
+=
+0.02.
+$$
+
+La tasa efectiva anual equivalente es
+
+$$
+\begin{aligned}
+i
+&=
+(1+0.02)^{12}-1\\
+&\approx
+0.2682.
+\end{aligned}
+$$
+
+El costo efectivo anual es entonces de aproximadamente $26.82\%$, no $24\%$; la diferencia viene de la capitalización mensual.
+
+La interpretación de una APR depende de la regulación y de las condiciones contractuales. Antes de comparar productos financieros hay que identificar cómo está definida la tasa anunciada y con qué frecuencia se capitaliza.
+:::
+
+::: {.callout-note title="En Colombia: E.A., N.M.V. y la tasa de usura" icon=false}
+En el mercado colombiano la tasa efectiva anual (E.A.) es la referencia común para comparar productos. Las tasas nominales se identifican con siglas que dicen la frecuencia y si los intereses se liquidan al final o al inicio del periodo: N.M.V. (nominal mes vencido, nuestra $i^{(12)}$), N.T.V. (trimestre vencido, $i^{(4)}$), N.S.V. (semestre vencido, $i^{(2)}$) y sus versiones anticipadas, que veremos enseguida.
+
+La Superintendencia Financiera certifica el **interés bancario corriente** como tasa efectiva anual, y la **tasa de usura** —el máximo legal para los intereses remuneratorios o de mora— es $1.5$ veces ese interés bancario corriente.[^usura] El Banco de la República ilustra el cálculo con un interés bancario corriente de $19.16\%$ E.A., que lleva a una tasa de usura de $28.74\%$ E.A. Con ese límite, un crédito anunciado al $2.2\%$ mes vencido equivale a
+
+$$
+(1.022)^{12}-1\approx 0.2984,
+$$
+
+es decir, $29.84\%$ E.A., y lo superaría. Para saber si una tasa mensual respeta la usura, primero hay que convertirla a E.A.; la propia Superintendencia publica un simulador de conversión de tasas para hacer ese paso.[^simulador]
+:::
+
+[^usura]: Banco de la República, glosario «Tasa de usura»: <https://www.banrep.gov.co/es/glosario/tasa-usura>. El interés bancario corriente se certifica por modalidad de crédito y cambia periódicamente; las cifras del texto son solo ilustrativas.
+
+[^simulador]: Superintendencia Financiera de Colombia, «Simulador de conversión de tasas de interés»: <https://www.superfinanciera.gov.co/publicaciones/61554/consumidor-financieroinformacion-generalsimulador-de-conversion-de-tasas-de-interes-61554/>.
+
+### Tasa nominal anual de descuento convertible $m$ veces
+
+Sea $d_m$ la tasa efectiva de descuento de cada subperiodo. Si el año se divide en $m$ subperiodos iguales, el factor de descuento anual satisface
+
+$$
+v=(1-d_m)^m.
+$$
+
+Como
+
+$$
+v=(1+i)^{-1},
+$$
+
+se obtiene
+
+$$
+d_m
+=
+1-(1+i)^{-1/m}.
+$$
+
+La tasa nominal anual de descuento convertible $m$ veces se define por
+
+$$
+d^{(m)}
+=
+m d_m.
+$$
+
+Así,
+
+$$
+d^{(m)}
+=
+m\left[1-(1+i)^{-1/m}\right].
+$$
+
+La diferencia entre $i^{(m)}$ y $d^{(m)}$ no es solo de notación: la primera se construye con tasas efectivas de interés por subperiodo y la segunda con tasas efectivas de descuento. Aun así, las dos están ligadas: para un mismo subperiodo, los factores de acumulación y descuento son inversos. Por ello,
+
+$$
+\left(1+\frac{i^{(m)}}{m}\right)
+\left(1-\frac{d^{(m)}}{m}\right)
+=
+1.
+$$
+
+Con esta identidad podemos convertir directamente entre ambas tasas nominales, sin pasar por la efectiva anual.
+
+::: {.callout-note title="En Colombia: tasas anticipadas" icon=false}
+Algunos créditos y títulos se pactan con intereses anticipados, que se liquidan al inicio de cada periodo. Una tasa del $12\%$ N.T.A. (nominal trimestre anticipado) es exactamente $d^{(4)}=0.12$: cada trimestre se descuenta el $3\%$ al comienzo. Su equivalente efectivo anual es
+
+$$
+i=\left(1-\frac{0.12}{4}\right)^{-4}-1=(0.97)^{-4}-1\approx 0.1296,
+$$
+
+mientras que un $12\%$ N.T.V. equivale a $(1.03)^4-1\approx 0.1255$. Con el mismo porcentaje anunciado, la tasa anticipada cuesta más —o rinde más, según el lado de la operación— porque el interés se paga antes.
+:::
+
+### Tasas reales e inflación
+
+En economía financiera, *nominal* también se dice de una tasa que no ha sido ajustada por inflación. Si $i_{\mathrm{nom}}$ es la tasa nominal de interés, $\pi$ la inflación del periodo y $r$ la tasa real, la ecuación de Fisher establece
+
+$$
+1+i_{\mathrm{nom}}
+=
+(1+r)(1+\pi).
+$$
+
+Despejando la tasa real,
+
+$$
+r
+=
+\frac{1+i_{\mathrm{nom}}}{1+\pi}-1.
+$$
+
+La distinción pesa mucho en pensiones y seguros de largo plazo: los flujos indexados a la inflación deben valorarse con tasas reales, mientras que los flujos nominales fijos requieren tasas nominales.
+
+::: {.callout-note title="En Colombia: la UVR" icon=false}
+La **unidad de valor real (UVR)** es una unidad de cuenta que certifica el Banco de la República y que refleja el poder adquisitivo según la variación del índice de precios al consumidor (IPC).[^uvr] En un crédito de vivienda pactado en UVR, el saldo se reajusta con la inflación y la tasa pactada es una tasa real: en el lenguaje de la ecuación de Fisher, esa tasa hace el papel de $r$ y la variación de la UVR, el de $\pi$. El Gobierno también emite TES denominados en UVR, que son la referencia natural para descontar flujos indexados a la inflación.
+:::
+
+[^uvr]: Banco de la República, glosario «Unidad de valor real (UVR)»: <https://www.banrep.gov.co/glosario/uvr>.
+
+::: {.callout-warning title="Advertencia. Dos significados de «nominal»" icon=false}
+En $i^{(m)}$ y $d^{(m)}$, *nominal* se refiere a una **frecuencia de conversión**.
+
+En economía financiera, *nominal* también puede significar que la tasa está expresada sin descontar el efecto de la inflación.
+
+El contexto tiene que dejar claro cuál de las dos acepciones se está usando.
+:::
+
+Las tasas nominales de interés y de descuento representan una misma ley financiera mediante conversiones discretas. En la siguiente sección veremos la **fuerza de interés**, que representa esa misma ley de forma continua.
+
+## Fuerza de interés
+
+La fuerza de interés aparece cuando nos preguntamos qué pasa si la frecuencia de capitalización crece indefinidamente. Así pasamos de una descripción discreta de la acumulación a una representación continua de la misma ley financiera.
+
+Fijemos una tasa efectiva anual $i>-1$. Para cada frecuencia $m$, sea $i^{(m)}$ la tasa nominal anual de interés convertible $m$ veces que es equivalente a $i$. Como vimos antes,
+
+$$
+i^{(m)}
+=
+m\left[(1+i)^{1/m}-1\right].
+$$
+
+La tasa efectiva aplicada en cada subperiodo es
+
+$$
+\frac{i^{(m)}}{m}
+=
+(1+i)^{1/m}-1.
+$$
+
+Cuando la frecuencia de conversión crece, la tasa efectiva de cada subperiodo disminuye, pero la tasa nominal equivalente $i^{(m)}$ se acerca a un límite.
+
+::: {.callout-note title="Definición. Fuerza de interés constante" icon=false}
+La **fuerza de interés constante** equivalente a una tasa efectiva anual $i$ se define por
+
+$$
+\delta
+=
+\lim_{m\to\infty}i^{(m)},
+$$
+
+siempre que exista el límite.
+:::
+
+Usando la expresión de $i^{(m)}$,
+
+$$
+\delta
+=
+\lim_{m\to\infty}
+m\left[(1+i)^{1/m}-1\right].
+$$
+
+Para evaluar el límite, escribamos
+
+$$
+\delta
+=
+\lim_{m\to\infty}
+\frac{(1+i)^{1/m}-1}{1/m}.
+$$
+
+Esta expresión es una forma indeterminada $0/0$. Para aplicar la regla de L'Hôpital tratamos $m$ como una variable real positiva y derivamos por separado el numerador y el denominador con respecto a $m$.
+
+Para el numerador, como $(1+i)^{1/m}=e^{\ln(1+i)/m}$, la regla de la cadena da
+
+$$
+\begin{aligned}
+\frac{d}{dm}\left[(1+i)^{1/m}-1\right]
+&=
+(1+i)^{1/m}\ln(1+i)\,\frac{d}{dm}\left(\frac{1}{m}\right)\\
+&=
+-\frac{\ln(1+i)}{m^2}(1+i)^{1/m}.
+\end{aligned}
+$$
+
+Para el denominador,
+
+$$
+\frac{d}{dm}\left(\frac{1}{m}\right)
+=
+-\frac{1}{m^2}.
+$$
+
+Con estas dos derivadas, la regla de L'Hôpital nos deja
+
+$$
+\begin{aligned}
+\delta
+&=
+\lim_{m\to\infty}
+\frac{
+-\dfrac{\ln(1+i)}{m^2}(1+i)^{1/m}
+}{
+-\dfrac{1}{m^2}
+}\\
+&=
+\lim_{m\to\infty}
+(1+i)^{1/m}\ln(1+i)\\
+&=
+\ln(1+i).
+\end{aligned}
+$$
+
+Es decir,
+
+$$
+\boxed{
+\delta=\ln(1+i)
+}
+$$
+
+y, de forma equivalente,
+
+$$
+\boxed{
+i=e^\delta-1.
+}
+$$
+
+Ojo con un punto conceptual: dentro del límite hay que mantener la sucesión $i^{(m)}$ hasta evaluar su comportamiento. No es válido sustituir cada $i^{(m)}$ por su límite $\delta$ antes de tomar el límite.
+
+### Interpretación mediante capitalización continua
+
+Podemos mirar la relación anterior desde la otra dirección. Suponga que una tasa nominal anual $\delta$ se convierte $m$ veces por año. Durante $t$ años, el factor de acumulación es
+
+$$
+\left(1+\frac{\delta}{m}\right)^{mt}.
+$$
+
+Al aumentar indefinidamente la frecuencia de conversión,
+
+$$
+\begin{aligned}
+\lim_{m\to\infty}
+\left(1+\frac{\delta}{m}\right)^{mt}
+&=
+\left[
+\lim_{m\to\infty}
+\left(1+\frac{\delta}{m}\right)^m
+\right]^t\\
+&=
+(e^\delta)^t\\
+&=
+e^{\delta t}.
+\end{aligned}
+$$
+
+Con fuerza de interés constante, entonces,
+
+$$
+\boxed{
+a(t)=e^{\delta t}.
+}
+$$
+
+Ojo: $e^{\delta t}$ no es una ley financiera distinta del interés compuesto efectivo. Si $\delta=\ln(1+i)$, entonces
+
+$$
+e^{\delta t}
+=
+e^{t\ln(1+i)}
+=
+(1+i)^t.
+$$
+
+La capitalización continua es, entonces, otra forma de parametrizar la misma ley de acumulación.
+
+::: {.callout-note title="Observación matemática" icon=false}
+El límite fundamental que sustenta esta interpretación es
+
+$$
+\lim_{m\to\infty}
+\left(1+\frac{x}{m}\right)^m
+=
+e^x.
+$$
+
+La frecuencia de capitalización tiende a infinito, mientras que el crecimiento acumulado durante un horizonte finito permanece bien definido.
+:::
+
+::: {.callout-note title="La fuerza de interés en derivados financieros" icon=false}
+En la literatura de valoración de derivados es habitual trabajar con capitalización continua: la tasa libre de riesgo se denota con frecuencia por $r$ y el factor de acumulación se escribe $e^{rT}$, donde $T$ es el tiempo al vencimiento.
+
+La elección tiene una razón práctica: en estas transacciones los periodos que importan son muy cortos. Las posiciones se valoran y se liquidan a diario, las coberturas se ajustan con mucha frecuencia y los modelos de precios, como el de Black-Scholes, describen el activo en tiempo continuo. Cuando el intervalo entre una capitalización y la siguiente es tan pequeño, lo natural es pasar al límite $m\to\infty$, y ese límite es justamente la fuerza de interés. Además, con $e^{rT}$ los factores de periodos consecutivos se combinan sumando exponentes, lo que simplifica mucho el álgebra de estos modelos.
+
+En este lenguaje, $r$ hace el papel de una fuerza de interés constante. Por ejemplo, el precio forward teórico de un activo que no paga dividendos se puede expresar como
+
+$$
+F=S_0e^{rT}.
+$$
+
+Como
+
+$$
+e^{rT}=(1+i)^T
+$$
+
+cuando $r=\ln(1+i)$, los resultados formulados con capitalización continua se traducen a tasas efectivas equivalentes.
+:::
+
+### Equivalencias completas
+
+Con la fuerza de interés ya definida, podemos completar el conjunto de relaciones entre las principales convenciones de tasa.
+
+::: {.callout-important title="Ordenamiento de tasas equivalentes" icon=false}
+Si $i>0$ y $m\ge 2$, las tasas equivalentes satisfacen
+
+$$
+d<d^{(m)}<\delta<i^{(m)}<i.
+$$
+
+Este ordenamiento funciona como regla de plausibilidad: una conversión que no la respete hay que revisarla antes de usarla en una valoración.
+:::
+
+::: {.callout-tip title="Ejemplo. Equivalencias de una tasa efectiva anual" icon=false}
+Considere una tasa efectiva anual (E.A.)
+
+$$
+i=0.08
+$$
+
+y una frecuencia mensual $m=12$.
+
+La tasa efectiva mensual equivalente es
+
+$$
+\begin{aligned}
+j_{12}
+&=
+(1.08)^{1/12}-1\\
+&\approx
+0.0064.
+\end{aligned}
+$$
+
+La tasa nominal anual de interés convertible mensualmente es
+
+$$
+\begin{aligned}
+i^{(12)}
+&=
+12j_{12}\\
+&\approx
+0.0772.
+\end{aligned}
+$$
+
+La tasa efectiva de descuento anual es
+
+$$
+\begin{aligned}
+d
+&=
+\frac{0.08}{1.08}\\
+&\approx
+0.0741.
+\end{aligned}
+$$
+
+La tasa nominal anual de descuento convertible mensualmente es
+
+$$
+\begin{aligned}
+d^{(12)}
+&=
+12\left[1-(1.08)^{-1/12}\right]\\
+&\approx
+0.0767.
+\end{aligned}
+$$
+
+El factor de descuento anual es
+
+$$
+v
+=
+\frac{1}{1.08}
+\approx
+0.9259.
+$$
+
+Finalmente,
+
+$$
+\begin{aligned}
+\delta
+&=
+\ln(1.08)\\
+&\approx
+0.0770.
+\end{aligned}
+$$
+
+En resumen,
+
+$$
+\begin{aligned}
+i &= 0.0800,\\
+j_{12} &= 0.0064,\\
+i^{(12)} &= 0.0772,\\
+d &= 0.0741,\\
+d^{(12)} &= 0.0767,\\
+v &= 0.9259,\\
+\delta &= 0.0770.
+\end{aligned}
+$$
+
+Se cumple el orden esperado:
+
+$$
+0.0741
+<
+0.0767
+<
+0.0770
+<
+0.0772
+<
+0.0800.
+$$
+:::
+
+### Implementación con `tidyactuarial`
+
+::: {.callout-note title="Función tidyactuarial: interest_equivalents()" icon=false}
+`interest_equivalents()` recibe una tasa expresada bajo una convención dada y devuelve sus principales representaciones financieras equivalentes.
+
+```r
+interest_equivalents(
+  i_type = c(
+    "effective",
+    "nominal_interest",
+    "nominal_discount",
+    "force"
+  ),
+  i,
+  m = 1L
+)
+```
+
+| Argumento | Condición | Significado |
+|---|---|---|
+| `i` | Obligatorio | Valor numérico escalar de la tasa suministrada. |
+| `i_type` | Opcional | Convención de la tasa de entrada: `"effective"`, `"nominal_interest"`, `"nominal_discount"` o `"force"`. Por defecto, `"effective"`. |
+| `m` | Opcional | Frecuencia de conversión utilizada para las tasas nominales. Por defecto, `1`. |
+
+La función transforma primero la tasa de entrada a su tasa efectiva anual equivalente y, a partir de ella, construye las demás representaciones.
+
+**Salida.** Devuelve una tibble con las columnas `family`, `notation`, `m`, `description` y `value`.
+
+**Vectorización.** La interfaz directa trabaja con una tasa escalar. Para procesar varias tasas puede combinarse con herramientas como `purrr::pmap()`.
+:::
+
+::: {.callout-warning title="Notación del libro y notación de tidyactuarial" icon=false}
+En este libro se utiliza
+
+$$
+i^{(m)}
+$$
+
+para la tasa nominal anual de interés convertible $m$ veces.
+
+En la salida de `interest_equivalents()`, la columna `notation` representa esta misma cantidad mediante
+
+$$
+j^{(m)}.
+$$
+
+La diferencia es solo de notación. En los desarrollos matemáticos del libro mantendremos $i^{(m)}$; al leer la salida del paquete, tenga presente esta correspondencia.
+:::
+
+Auditemos el cálculo anterior con `interest_equivalents()`:
+
+```{r}
+#| label: equivalencias-tasas-tidyactuarial-capitulo-01
+
+tasa_anual <- 0.08          # tasa efectiva anual de entrada
+frecuencia_mensual <- 12    # subperiodos por año (capitalización mensual)
+
+equivalencias_paquete <- interest_equivalents(
+  i_type = "effective",     # la tasa de entrada es efectiva anual
+  i = tasa_anual,           # valor de la tasa
+  m = frecuencia_mensual    # frecuencia para las equivalencias nominales
+)
+```
+
+```{r}
+#| label: tabla-auditoria-equivalencias-tasas
+#| echo: false
+#| results: asis
+
+equivalencias_manual <- tibble::tibble(
+  magnitud = c(
+    "i",
+    "j_12",
+    "i^(12)",
+    "d",
+    "d^(12)",
+    "v",
+    "delta"
+  ),
+  analitico = c(
+    tasa_anual,
+    (1 + tasa_anual)^(1 / frecuencia_mensual) - 1,
+    frecuencia_mensual *
+      ((1 + tasa_anual)^(1 / frecuencia_mensual) - 1),
+    tasa_anual / (1 + tasa_anual),
+    frecuencia_mensual *
+      (1 - (1 + tasa_anual)^(-1 / frecuencia_mensual)),
+    1 / (1 + tasa_anual),
+    log(1 + tasa_anual)
+  )
+)
+
+equivalencias_paquete_resumen <- equivalencias_paquete |>
+  dplyr::transmute(
+    magnitud = dplyr::case_when(
+      notation == "v" ~ "v",
+      family == "effective" ~ "i",
+      family == "discount" ~ "d",
+      family == "force" ~ "delta",
+      family == "nominal_interest" ~ "i^(12)",
+      family == "nominal_discount" ~ "d^(12)",
+      TRUE ~ notation
+    ),
+    tidyactuarial = value
+  )
+
+fila_tasa_mensual <- equivalencias_paquete_resumen |>
+  dplyr::filter(magnitud == "i^(12)") |>
+  dplyr::transmute(
+    magnitud = "j_12",
+    tidyactuarial = tidyactuarial / frecuencia_mensual
+  )
+
+equivalencias_paquete_resumen <- dplyr::bind_rows(
+  equivalencias_paquete_resumen,
+  fila_tasa_mensual
+)
+
+equivalencias_auditoria <- dplyr::left_join(
+  equivalencias_manual,
+  equivalencias_paquete_resumen,
+  by = "magnitud"
+)
+
+tabla_comparacion(
+  equivalencias_auditoria,
+  titulo = "Auditoría de equivalencias de tasas",
+  digits = 4
+)
+```
+
+La auditoría confirma que las distintas convenciones representan la misma ley financiera cuando se expresan sobre una base común. Elegir entre tasa efectiva, nominal, de descuento o fuerza de interés depende de cómo esté expresado el contrato o el modelo, no de una rentabilidad subyacente distinta.
+
+### Interpretación instantánea de la fuerza de interés
+
+La fuerza de interés también se puede definir directamente desde la variación instantánea de la función de acumulación.
+
+::: {.callout-note title="Definición. Fuerza de interés instantánea" icon=false}
+Suponga que la función de acumulación $a$ es diferenciable en $t$ y que $a(t)>0$. La **fuerza de interés instantánea** en el tiempo $t$ se define como
+
+$$
+\delta(t)
+=
+\frac{a'(t)}{a(t)}.
+$$
+
+Equivalentemente,
+
+$$
+\delta(t)
+=
+\frac{d}{dt}\ln a(t).
+$$
+
+La fuerza de interés mide la tasa instantánea de crecimiento relativo de la función de acumulación.
+:::
+
+Si la fuerza es constante,
+
+$$
+\delta(t)=\delta,
+$$
+
+entonces
+
+$$
+\frac{a'(t)}{a(t)}=\delta,
+$$
+
+o, equivalentemente,
+
+$$
+a'(t)=\delta a(t).
+$$
+
+Con la condición inicial $a(0)=1$, se obtiene el problema de valor inicial
+
+$$
+\begin{cases}
+a'(t)=\delta a(t),\\
+a(0)=1.
+\end{cases}
+$$
+
+Separando variables e integrando entre $0$ y $t$,
+
+$$
+\int_0^t
+\frac{a'(u)}{a(u)}\,du
+=
+\int_0^t
+\delta\,du.
+$$
+
+Como
+
+$$
+\frac{d}{du}\ln a(u)
+=
+\frac{a'(u)}{a(u)},
+$$
+
+resulta
+
+$$
+\ln a(t)-\ln a(0)=\delta t.
+$$
+
+Usando $a(0)=1$,
+
+$$
+\ln a(t)=\delta t,
+$$
+
+y, por tanto,
+
+$$
+a(t)=e^{\delta t}.
+$$
+
+Esta segunda deducción nos dice que la capitalización continua no es solo el límite de una frecuencia de conversión creciente: también es la solución natural de un modelo dinámico en el que el crecimiento instantáneo del capital es proporcional al monto acumulado.
+
+::: {.callout-tip title="Ejemplo. Retornos logarítmicos de un activo" icon=false}
+El retorno logarítmico de un activo cuyo precio pasa de $S_0$ a $S_t$ se define como
+
+$$
+r_{\log}
+=
+\ln\left(\frac{S_t}{S_0}\right).
+$$
+
+Paola sigue el precio de una acción que vale 100 al inicio, 106 al final del primer periodo y 103 al final del segundo. Los retornos logarítmicos de cada periodo son
+
+$$
+r_{\log,1}
+=
+\ln\left(\frac{106}{100}\right)
+\approx
+0.0583,
+$$
+
+$$
+r_{\log,2}
+=
+\ln\left(\frac{103}{106}\right)
+\approx
+-0.0287.
+$$
+
+Su suma coincide con el retorno logarítmico de los dos periodos:
+
+$$
+\begin{aligned}
+r_{\log,1}+r_{\log,2}
+&\approx
+0.0296\\
+&=
+\ln\left(\frac{103}{100}\right).
+\end{aligned}
+$$
+
+Esta aditividad temporal es la razón por la que los retornos logarítmicos se usan tanto en análisis cuantitativo y en la simulación de trayectorias de precios.
+
+Si
+
+$$
+S_t=S_0(1+i)^t,
+$$
+
+entonces
+
+$$
+r_{\log}
+=
+t\ln(1+i)
+=
+\delta t.
+$$
+
+Así, con una tasa efectiva constante, el retorno logarítmico es la fuerza de interés acumulada durante el horizonte observado.
+:::
+
+::: {.callout-tip title="Idea clave" icon=false}
+La fuerza de interés se puede ver de dos formas equivalentes: como el límite de una capitalización cada vez más frecuente o como la tasa instantánea de crecimiento relativo de la función de acumulación.
+:::
+
+::: {.callout-tip title="Anticipación: la fuerza de mortalidad" icon=false}
+Esta misma estructura matemática reaparecerá en contingencias de vida. Si ${}_tp_x$ es la probabilidad de que una persona de edad $x$ sobreviva al menos $t$ años, la **fuerza de mortalidad** se define como
+
+$$
+\mu_{x+t}
+=
+-\frac{
+\dfrac{d}{dt}{}_tp_x
+}{
+{}_tp_x
+},
+$$
+
+y la función de supervivencia puede recuperarse mediante
+
+$$
+{}_tp_x
+=
+\exp\left(
+-\int_0^t
+\mu_{x+s}\,ds
+\right).
+$$
+
+La analogía estructural es directa:
+
+| Concepto financiero | Concepto biométrico |
+|---|---|
+| Función de acumulación $a(t)$ | Función de supervivencia ${}_tp_x$ |
+| Fuerza de interés $\delta(t)$ | Fuerza de mortalidad $\mu_{x+t}$ |
+| $a(t)=\exp\left(\int_0^t\delta(s)\,ds\right)$ | ${}_tp_x=\exp\left(-\int_0^t\mu_{x+s}\,ds\right)$ |
+
+El signo negativo refleja que la acumulación financiera crece con el tiempo, mientras que la probabilidad de supervivencia decrece. Esta analogía nos servirá más adelante para dar el paso a las contingencias de vida.
+:::
+
+
+## La función de acumulación como objeto unificador
+
+Hasta aquí hemos visto varias convenciones para describir el crecimiento del dinero: interés simple, interés compuesto, tasas nominales, tasas de descuento y fuerza de interés. Todas se pueden expresar con un mismo objeto matemático: la función de acumulación.
+
+| Modelo | Función de acumulación |
+|---|---|
+| Interés simple | $a(t)=1+it$ |
+| Interés compuesto | $a(t)=(1+i)^t$ |
+| Fuerza constante | $a(t)=e^{\delta t}$ |
+
+Estas convenciones no son modelos aislados: son distintas formas de especificar una ley de acumulación. Conocida $a(t)$, el factor de descuento desde $t$ hasta el origen es
+
+$$
+v(t)=\frac{1}{a(t)}.
+$$
+
+Si $a$ es positiva y diferenciable, su fuerza de interés instantánea es
+
+$$
+\delta(t)=\frac{a'(t)}{a(t)}.
+$$
+
+Y al revés, si conocemos $\delta(t)$, la función de acumulación se recupera con
+
+$$
+a(t)
+=
+\exp\left(
+\int_0^t\delta(s)\,ds
+\right).
+$$
+
+Más generalmente, el factor que traslada una unidad monetaria desde $s$ hasta $t$, con $s<t$, es
+
+$$
+a(s,t)
+=
+\exp\left(
+\int_s^t\delta(u)\,du
+\right),
+$$
+
+y su recíproco es el factor de descuento $v(s,t)$.
+
+### Fuerza de interés variable
+
+Cuando $\delta(t)$ depende del tiempo, dos intervalos de igual longitud pueden producir acumulaciones distintas. No basta con conocer la duración de la inversión: también importa en qué parte del eje temporal ocurre.
+
+::: {.callout-tip title="Ejemplo. Fondo de becas con fuerza de interés variable" icon=false}
+La universidad donde estudió Paola administra un fondo para financiar becas, y le pide a Paola que lo valore. El fondo utiliza una ley de acumulación cuya fuerza de interés anual depende del tiempo según
+
+$$
+\delta(t)=0.030+0.002t,
+\qquad t\geq 0,
+$$
+
+donde $t$ se mide en años.
+
+La función de acumulación se obtiene integrando la fuerza desde el origen hasta $t$:
+
+$$
+\begin{aligned}
+a(t)
+&=
+\exp\left(
+\int_0^t
+(0.030+0.002s)\,ds
+\right)\\
+&=
+\exp\left(
+0.030t+0.001t^2
+\right).
+\end{aligned}
+$$
+
+El factor de descuento es su recíproco:
+
+$$
+v(t)
+=
+\frac{1}{a(t)}
+=
+\exp\left(
+-0.030t-0.001t^2
+\right).
+$$
+
+Si hoy se invierten COP 20 000 000, al finalizar el sexto año la fuerza acumulada es
+
+$$
+\begin{aligned}
+\int_0^6\delta(s)\,ds
+&=
+0.030(6)+0.001(6)^2\\
+&=
+0.216.
+\end{aligned}
+$$
+
+De aquí,
+
+$$
+\begin{aligned}
+A(6)
+&=
+20\,000\,000e^{0.216}\\
+&\approx
+24\,822\,047.58.
+\end{aligned}
+$$
+
+La tasa efectiva correspondiente al intervalo completo de seis años es
+
+$$
+\begin{aligned}
+i_{[0,6]}
+&=
+e^{0.216}-1\\
+&\approx
+0.2411.
+\end{aligned}
+$$
+
+La rentabilidad acumulada en los seis años es, entonces, de aproximadamente $24.11\%$. Esta **no** es una tasa anual.
+
+Para la tasa efectiva anual equivalente buscamos $i_{\mathrm{anual}}$ tal que
+
+$$
+(1+i_{\mathrm{anual}})^6
+=
+e^{0.216}.
+$$
+
+Luego,
+
+$$
+\begin{aligned}
+i_{\mathrm{anual}}
+&=
+e^{0.216/6}-1\\
+&=
+e^{0.036}-1\\
+&\approx
+0.0367.
+\end{aligned}
+$$
+
+La tasa efectiva anual equivalente es aproximadamente $3.67\%$. La diferencia entre la tasa del intervalo y su equivalente anual nos recuerda que toda tasa debe interpretarse junto con su horizonte temporal.
+:::
+
+### Fuerzas de interés definidas a trozos
+
+En la práctica, una cuenta, una política de inversión o una base de valoración puede cambiar de régimen en fechas establecidas de antemano. Lo natural es modelarlo con una fuerza distinta en cada tramo.
+
+::: {.callout-tip title="Ejemplo. Acumulación bajo tres regímenes" icon=false}
+Considere la fuerza
+
+$$
+\delta(t)
+=
+\begin{cases}
+0.035, & 0\le t<2,\\
+0.045, & 2\le t<5,\\
+0.040, & t\ge 5.
+\end{cases}
+$$
+
+Para trasladar una unidad monetaria de $t=1$ a $t=6$, separamos el intervalo en los tres regímenes que atraviesa:
+
+$$
+\begin{aligned}
+\int_1^6\delta(u)\,du
+&=
+\int_1^2 0.035\,du
++
+\int_2^5 0.045\,du
++
+\int_5^6 0.040\,du\\
+&=
+0.035(1)+0.045(3)+0.040(1)\\
+&=
+0.210.
+\end{aligned}
+$$
+
+El factor de acumulación y su recíproco son
+
+$$
+a(1,6)
+=
+e^{0.210}
+\approx
+1.2337,
+$$
+
+$$
+v(1,6)
+=
+e^{-0.210}
+\approx
+0.8106.
+$$
+
+Así, la tasa efectiva del intervalo completo es
+
+$$
+i_{[1,6]}
+=
+a(1,6)-1
+\approx
+0.2337.
+$$
+
+Como el intervalo tiene cinco años, la fuerza media es
+
+$$
+\overline{\delta}_{[1,6]}
+=
+\frac{1}{5}
+\int_1^6\delta(u)\,du
+=
+0.042,
+$$
+
+y la tasa efectiva anual equivalente es
+
+$$
+\begin{aligned}
+i_{\mathrm{anual}}
+&=
+e^{0.042}-1\\
+&\approx
+0.0429.
+\end{aligned}
+$$
+
+La tasa efectiva anual equivalente es aproximadamente $4.29\%$.
+:::
+
+::: {.callout-warning title="Advertencia. El horizonte forma parte de la tasa" icon=false}
+El valor $0.210$ es la fuerza acumulada durante cinco años, no una tasa efectiva anual. La tasa efectiva de todo el intervalo es $e^{0.210}-1$, y la tasa efectiva anual equivalente es $e^{0.210/5}-1$; no son magnitudes intercambiables.
+:::
+
+Las funciones `accumulation_factor()` y `discount_factor()` que ya conocemos trabajan directamente con una fuerza de interés variable. Cuando se les pasa `delta`, `tidyactuarial` evalúa numéricamente
+
+$$
+\int_s^t\delta(u)\,du
+$$
+
+mediante `stats::integrate()`. La auditoría siguiente compara, entonces, integrales obtenidas analíticamente con una cuadratura numérica independiente.
+
+```{r}
+#| label: auditoria-fuerzas-tidyactuarial-capitulo-01
+
+# Fuerza de interés del fondo de becas: delta(t) = 0.030 + 0.002 t
+delta_becas <- function(t) {
+  0.030 + 0.002 * t
+}
+
+# Fuerza de interés definida a trozos: tres regímenes
+delta_tramos <- function(t) {
+  dplyr::case_when(
+    t < 2 ~ 0.035,   # primer régimen: [0, 2)
+    t < 5 ~ 0.045,   # segundo régimen: [2, 5)
+    TRUE ~ 0.040     # tercer régimen: t >= 5
+  )
+}
+
+factor_becas_0_6 <- accumulation_factor(
+  s = 0,                # tiempo inicial
+  t = 6,                # tiempo final
+  delta = delta_becas   # ley financiera dada por la fuerza de interés
+)
+
+descuento_becas_0_6 <- discount_factor(
+  s = 0,
+  t = 6,
+  delta = delta_becas
+)
+```
+
+```{r}
+#| label: auditoria-fuerzas-tramos-tidyactuarial-capitulo-01
+
+factor_tramos_1_6 <- accumulation_factor(
+  s = 1,                 # el intervalo cruza los tres regímenes
+  t = 6,
+  delta = delta_tramos   # la integral se evalúa tramo a tramo
+)
+
+descuento_tramos_1_6 <- discount_factor(
+  s = 1,
+  t = 6,
+  delta = delta_tramos
+)
+```
+
+```{r}
+#| label: tabla-auditoria-fuerzas-capitulo-01
+#| echo: false
+#| results: asis
+
+auditoria_fuerzas <- tibble::tibble(
+  magnitud = c(
+    "Factor del fondo a(0,6)",
+    "Descuento del fondo v(0,6)",
+    "Monto de COP 20 millones",
+    "Tasa efectiva anual equivalente",
+    "Factor por tramos a(1,6)",
+    "Descuento por tramos v(1,6)"
+  ),
+  analitico = c(
+    exp(0.216),
+    exp(-0.216),
+    20000000 * exp(0.216),
+    exp(0.216 / 6) - 1,
+    exp(0.210),
+    exp(-0.210)
+  ),
+  tidyactuarial = c(
+    factor_becas_0_6,
+    descuento_becas_0_6,
+    20000000 * factor_becas_0_6,
+    factor_becas_0_6^(1 / 6) - 1,
+    factor_tramos_1_6,
+    descuento_tramos_1_6
+  )
+)
+
+auditoria_fuerzas |>
+  tabla_comparacion(
+    titulo = "Auditoría de fuerzas variables",
+    digits = 4
+  )
+```
+
+La coincidencia confirma dos ideas: una fuerza variable se integra sobre el intervalo exacto, y una fuerza definida a trozos se acumula respetando cada cambio de régimen.
+
+### Rendimientos de una cuenta con aportes: TWR, MWRR y DWR
+
+Cuando una cuenta de inversión recibe depósitos o retiros durante el periodo de medición, el saldo observado mezcla dos efectos: el desempeño de los activos y los flujos externos que hace el inversionista. Por eso conviene distinguir medidas que respondan preguntas diferentes.
+
+**Rendimiento ponderado por tiempo (TWR).** El *time-weighted rate of return* divide el horizonte en subperiodos determinados por las fechas de los flujos externos. Si $r_j$ es el rendimiento de la cartera durante el subperiodo $j$, antes de incorporar el flujo que ocurre en su extremo, entonces
+
+$$
+1+i_{\mathrm{TWR}}
+=
+\prod_{j=1}^{k}(1+r_j).
+$$
+
+El TWR elimina el efecto del tamaño y del momento de los aportes y retiros; por eso es el indicado para evaluar el desempeño de una estrategia cuando el gestor no controla los flujos externos.
+
+**Rendimiento ponderado por dinero exacto (MWRR).** El *money-weighted rate of return* incorpora explícitamente el tamaño y el momento de los flujos. Es la tasa interna de rendimiento de la experiencia completa del inversionista.
+
+Si se realizan aportes $D_j$ en los tiempos $t_j$ y el saldo final es $S_T$, la tasa anual $i_{\mathrm{MWRR}}$ satisface
+
+$$
+\sum_j
+D_j(1+i_{\mathrm{MWRR}})^{T-t_j}
+=
+S_T.
+$$
+
+El MWRR da más peso a los periodos en que hubo más capital realmente invertido.
+
+::: {.callout-note title="Convención de SOA Exam FM" icon=false}
+En parte de la literatura financiera, *dollar-weighted return* y *money-weighted return* se usan casi como sinónimos. En el contexto del **Exam FM de la SOA**, sin embargo, el **dollar-weighted rate of return (DWR)** es la aproximación con interés simple al rendimiento ponderado por dinero.
+
+En este libro se distinguirá:
+
+- **MWRR:** rendimiento ponderado por dinero exacto, obtenido como una tasa interna de rendimiento;
+- **DWR (SOA FM):** aproximación de interés simple al rendimiento ponderado por dinero.
+:::
+
+::: {.callout-tip title="Ejemplo. Una cuenta con un aporte intermedio" icon=false}
+La cuenta de inversión de Paola inicia con USD 1000. Al final del primer año, antes de efectuar un nuevo aporte, su saldo es USD 1200. En ese momento Paola deposita USD 500 y el saldo pasa a USD 1700. Al final del segundo año la cuenta vale USD 1760.
+
+#### Rendimiento ponderado por tiempo
+
+El rendimiento del primer año es
+
+$$
+r_1
+=
+\frac{1200}{1000}-1
+=
+0.20.
+$$
+
+El rendimiento del segundo año, calculado sobre el saldo posterior al aporte, es
+
+$$
+\begin{aligned}
+r_2
+&=
+\frac{1760}{1700}-1\\
+&\approx
+0.0353.
+\end{aligned}
+$$
+
+Así, el TWR acumulado durante los dos años es
+
+$$
+\begin{aligned}
+i_{\mathrm{TWR}}
+&=
+(1+r_1)(1+r_2)-1\\
+&=
+(1.20)\left(\frac{1760}{1700}\right)-1\\
+&\approx
+0.2424.
+\end{aligned}
+$$
+
+El rendimiento acumulado durante los dos años es aproximadamente $24.24\%$.
+
+Para compararlo con tasas anuales calculamos su equivalente efectivo anual:
+
+$$
+\begin{aligned}
+i_{\mathrm{TWR,anual}}
+&=
+(1+i_{\mathrm{TWR}})^{1/2}-1\\
+&\approx
+0.1146.
+\end{aligned}
+$$
+
+Entonces,
+
+$$
+\boxed{
+i_{\mathrm{TWR,anual}}
+\approx
+11.46\%.
+}
+$$
+
+#### Rendimiento ponderado por dinero exacto
+
+El MWRR se obtiene de la ecuación de valor que acumula cada aporte hasta el final del segundo año:
+
+$$
+1000(1+i_{\mathrm{MWRR}})^2
++
+500(1+i_{\mathrm{MWRR}})
+=
+1760.
+$$
+
+Tomando
+
+$$
+x=1+i_{\mathrm{MWRR}},
+$$
+
+se obtiene
+
+$$
+1000x^2+500x-1760=0.
+$$
+
+La raíz financiera es
+
+$$
+x=1.10.
+$$
+
+Así,
+
+$$
+\boxed{
+i_{\mathrm{MWRR}}
+=
+10.00\%.
+}
+$$
+
+#### Dollar-weighted return bajo la convención SOA FM
+
+Para la aproximación DWR usamos interés simple durante el tiempo que cada aporte permanece invertido: el aporte inicial está dos años y el de USD 500, un año:
+
+$$
+1000(1+2i_{\mathrm{DWR}})
++
+500(1+i_{\mathrm{DWR}})
+=
+1760.
+$$
+
+Al desarrollar,
+
+$$
+1500+2500i_{\mathrm{DWR}}=1760.
+$$
+
+Es decir,
+
+$$
+\begin{aligned}
+i_{\mathrm{DWR}}
+&=
+\frac{1760-1500}{2500}\\
+&=
+0.1040.
+\end{aligned}
+$$
+
+De aquí,
+
+$$
+\boxed{
+i_{\mathrm{DWR}}
+=
+10.40\%.
+}
+$$
+
+Las tres medidas producen:
+
+| Medida | Resultado anual |
+|---|---:|
+| TWR anualizado | $11.46\%$ |
+| MWRR exacto | $10.00\%$ |
+| DWR, aproximación SOA FM | $10.40\%$ |
+
+El aporte adicional de USD 500 quedó expuesto solo al segundo año, cuyo rendimiento fue menor que el del primero. Por eso la experiencia de Paola, ponderada por dinero, resulta inferior al TWR anualizado: la estrategia rindió bien, pero Paola aportó más dinero justo antes del año de menor rendimiento.
+:::
+
+El MWRR exacto lo auditamos con `future_value()`. La función no resuelve aquí la tasa: solo comprueba que el $10\%$ que obtuvimos analíticamente acumula los dos aportes hasta el saldo final observado.
+
+```{r}
+#| label: twr-mwrr-tidyactuarial-capitulo-01
+
+tasa_mwrr <- 0.10   # tasa que resolvimos analíticamente
+
+saldo_mwrr_paquete <-
+  future_value(
+    C = 1000,         # aporte inicial
+    i = tasa_mwrr,
+    t = 2             # permanece dos años
+  ) +
+  future_value(
+    C = 500,          # aporte al final del primer año
+    i = tasa_mwrr,
+    t = 1             # permanece un año
+  )
+```
+
+```{r}
+#| label: tabla-auditoria-twr-mwrr-capitulo-01
+#| echo: false
+#| results: asis
+
+tibble::tibble(
+  magnitud = "Saldo final de la ecuación MWRR",
+  analitico = 1760,
+  tidyactuarial = saldo_mwrr_paquete
+) |>
+  tabla_comparacion(
+    titulo = "Comprobación de la ecuación MWRR",
+    digits = 2
+  )
+```
+
+::: {.callout-important title="Interpretación actuarial" icon=false}
+El TWR y el MWRR responden preguntas distintas: el TWR describe el desempeño compuesto de la estrategia sin el efecto de los flujos externos, y el MWRR describe la experiencia del capital efectivamente aportado.
+
+Cuando solo hay aportes, un MWRR inferior al TWR suele indicar que una mayor cantidad de capital estuvo expuesta a los periodos de menor rendimiento. Con depósitos y retiros más generales, la diferencia se interpreta examinando juntos el tamaño, el signo y el momento de los flujos.
+
+El DWR que usa el Exam FM de la SOA se entiende como una aproximación de interés simple al rendimiento ponderado por dinero, no como sustituto de la TIR exacta.
+:::
+
+En los capítulos siguientes la función de acumulación nos servirá para trasladar flujos de caja, anualidades, préstamos, bonos, primas y reservas. Cambia el contexto, pero el mecanismo es el mismo: expresar todos los valores monetarios en una fecha focal mediante la ley financiera apropiada.
+
+::: {.callout-tip title="Idea clave" icon=false}
+Toda valoración financiera o actuarial parte de una pregunta: ¿cómo evoluciona el valor del dinero entre dos instantes?
+:::
+
+## Ejemplo integrador: comparación de alternativas de inversión
+
+Paola aprobó el examen FM y la aseguradora le reconoció un bono de USD 25 000. No lo necesitará durante seis años: quiere reservarlo para financiar una maestría en Ciencia Actuarial. Compara cuatro alternativas de inversión, y cada institución anuncia su rentabilidad con una convención distinta:
+
+- **Banco Horizonte:** tasa efectiva anual del $6.20\%$ (6.20 % E.A.).
+- **Banco Capital:** tasa nominal anual de interés del $6.05\%$, convertible mensualmente (6.05 % N.M.V.).
+- **Fondo Alpha:** fuerza de interés constante $\delta=0.0605$.
+- **Cooperativa Futuro:** tasa nominal anual de descuento del $5.90\%$, convertible trimestralmente (5.90 % N.T.A., nominal trimestre anticipado).
+
+Comparar directamente los porcentajes anunciados sería un error: antes de decidir hay que expresar todas las cotizaciones bajo una misma convención.
+
+El criterio será deliberadamente único: **determinar qué alternativa produce el mayor valor futuro al cabo de seis años**. No consideramos riesgo, liquidez, impuestos, costos de transacción ni restricciones contractuales.
+
+### Desarrollo analítico
+
+Para Banco Horizonte no se requiere conversión:
+
+$$
+i_H=0.0620.
+$$
+
+Para Banco Capital,
+
+$$
+\begin{aligned}
+i_C
+&=
+\left(
+1+\frac{0.0605}{12}
+\right)^{12}-1\\
+&\approx
+0.0622.
+\end{aligned}
+$$
+
+Para Fondo Alpha,
+
+$$
+\begin{aligned}
+i_A
+&=
+e^{0.0605}-1\\
+&\approx
+0.0624.
+\end{aligned}
+$$
+
+Para Cooperativa Futuro,
+
+$$
+\begin{aligned}
+i_F
+&=
+\left(
+1-\frac{0.059}{4}
+\right)^{-4}-1\\
+&\approx
+0.0612.
+\end{aligned}
+$$
+
+Con todas las alternativas expresadas como tasas efectivas anuales, el valor futuro es
+
+$$
+FV=25\,000(1+i)^6.
+$$
+
+Los resultados son:
+
+| Alternativa | Tasa efectiva anual | Valor futuro en 6 años |
+|---|---:|---:|
+| Banco Horizonte | $6.2000\%$ | USD 35 866.34 |
+| Banco Capital | $6.2206\%$ | USD 35 908.13 |
+| Fondo Alpha | $6.2368\%$ | USD 35 940.90 |
+| Cooperativa Futuro | $6.1242\%$ | USD 35 712.92 |
+
+Con el único criterio que fijamos, **Fondo Alpha** produce el mayor valor futuro. La diferencia frente a Banco Capital es pequeña; una decisión real tendría que incorporar otros elementos además de la tasa.
+
+Fíjese en la Cooperativa Futuro: su tasa anunciada es la más baja de las cuatro y, aun así, una tasa anticipada rinde más que una vencida con el mismo porcentaje. Si Paola hubiera descartado la cooperativa solo por el $5.90\%$, habría acertado por la razón equivocada.
+
+::: {.callout-important title="Idea central del caso" icon=false}
+Las tasas anunciadas no son comparables mientras estén expresadas bajo convenciones diferentes. El procedimiento correcto es
+
+$$
+\text{cotización}
+\longrightarrow
+\text{tasa efectiva anual equivalente}
+\longrightarrow
+\text{valor en una fecha común}.
+$$
+:::
+
+### Estandarización con `tidyactuarial`
+
+Este ejemplo nos sirve para presentar una función muy útil cuando varias tasas deben llevarse a una misma base.
+
+::: {.callout-note title="Función tidyactuarial: standardize_interest()" icon=false}
+`standardize_interest()` convierte una tasa expresada bajo una de las convenciones admitidas por `tidyactuarial` en su **tasa efectiva anual equivalente**.
+
+```r
+standardize_interest(
+  i_type = "effective",
+  i,
+  m = 1,
+  ...
+)
+```
+
+| Argumento | Condición | Significado |
+|---|---|---|
+| `i` | Obligatorio | Valor o vector numérico de tasas de entrada. |
+| `i_type` | Opcional | Convención de la tasa: `"effective"`, `"nominal_interest"`, `"nominal_discount"` o `"force"`. Por defecto, `"effective"`. |
+| `m` | Opcional | Frecuencia de conversión para tasas nominales. Por defecto, `1`; se ignora para tasas efectivas y fuerzas de interés. |
+| `...` | Opcional | Compatibilidad transitoria con nombres anteriores de argumentos. No se utilizará en los ejemplos del libro. |
+
+La función aplica, según la convención de entrada,
+
+$$
+i_e=i,
+$$
+
+$$
+i_e=
+\left(
+1+\frac{i^{(m)}}{m}
+\right)^m-1,
+$$
+
+$$
+i_e=
+\left(
+1-\frac{d^{(m)}}{m}
+\right)^{-m}-1,
+$$
+
+o
+
+$$
+i_e=e^\delta-1.
+$$
+
+**Vectorización.** `i_type`, `i` y `m` pueden tener longitud $1$ o una longitud común. Los escalares se reciclan sobre los demás casos.
+
+**Salida.** Devuelve un vector numérico de tasas efectivas anuales. Los valores faltantes se propagan.
+
+**Cuándo usarla.** `standardize_interest()` es apropiada cuando solo se necesita llevar una o varias tasas a la base efectiva anual; si se quiere toda la familia de representaciones equivalentes de una tasa, se usa `interest_equivalents()`.
+:::
+
+Aquí podemos estandarizar las cuatro cotizaciones al mismo tiempo.
+
+```{r}
+#| label: integrador-standardize-interest-capitulo-01
+
+capital_inicial <- 25000   # bono de Paola (USD)
+plazo_integrador <- 6      # horizonte, en años
+
+# Las cuatro cotizaciones tal como las anuncia cada institución
+alternativas <- tibble::tibble(
+  alternativa = c(
+    "Banco Horizonte",
+    "Banco Capital",
+    "Fondo Alpha",
+    "Cooperativa Futuro"
+  ),
+  tipo_tasa = c(
+    "effective",
+    "nominal_interest",
+    "force",
+    "nominal_discount"
+  ),
+  tasa_anunciada = c(
+    0.0620,
+    0.0605,
+    0.0605,
+    0.0590
+  ),
+  frecuencia = c(
+    1,
+    12,
+    1,
+    4
+  )
+)
+
+resultados_integrador <- alternativas |>
+  dplyr::mutate(
+    tasa_efectiva = standardize_interest(
+      i_type = tipo_tasa,        # convención de cada cotización
+      i = tasa_anunciada,        # tasa anunciada
+      m = frecuencia             # frecuencia (se ignora en efectiva y fuerza)
+    ),
+    valor_futuro = future_value(
+      C = capital_inicial,       # mismo capital para las cuatro alternativas
+      i = tasa_efectiva,         # ya estandarizada: efectiva anual
+      t = plazo_integrador       # mismo horizonte
+    )
+  )
+```
+
+Fíjese que `standardize_interest()` está vectorizada: una sola llamada lleva las cuatro cotizaciones a una base comparable. Luego `future_value()` aplica esas tasas al mismo capital y al mismo horizonte.
+
+```{r}
+#| label: auditoria-integrador-standardize-interest
+#| echo: false
+#| results: asis
+
+auditoria_integrador <- dplyr::bind_rows(
+  resultados_integrador |>
+    dplyr::transmute(
+      magnitud = paste(
+        alternativa,
+        "— tasa efectiva anual"
+      ),
+      analitico = c(
+        0.0620,
+        (1 + 0.0605 / 12)^12 - 1,
+        exp(0.0605) - 1,
+        (1 - 0.059 / 4)^(-4) - 1
+      ),
+      tidyactuarial = tasa_efectiva
+    ),
+  resultados_integrador |>
+    dplyr::transmute(
+      magnitud = paste(
+        alternativa,
+        "— valor futuro"
+      ),
+      analitico = capital_inicial * c(
+        (1 + 0.0620)^plazo_integrador,
+        (1 + ((1 + 0.0605 / 12)^12 - 1))^plazo_integrador,
+        (1 + (exp(0.0605) - 1))^plazo_integrador,
+        (1 + ((1 - 0.059 / 4)^(-4) - 1))^plazo_integrador
+      ),
+      tidyactuarial = valor_futuro
+    )
+)
+
+tabla_comparacion(
+  auditoria_integrador,
+  titulo = "Auditoría del ejemplo integrador",
+  digits = c(
+    rep(4, 4),
+    rep(2, 4)
+  )
+)
+```
+
+La auditoría confirma que la estandarización computacional reproduce las conversiones analíticas y que el orden de las alternativas se mantiene al llevar todas las inversiones al mismo horizonte.
+
+::: {.callout-note title="Alcance de la recomendación" icon=false}
+Fondo Alpha es la mejor alternativa **dentro del criterio de este ejemplo**: mayor valor futuro bajo una ley financiera determinística.
+
+En una decisión profesional también habría que examinar riesgo de crédito, liquidez, costos, impuestos, garantías y restricciones contractuales: una diferencia pequeña en rentabilidad puede dejar de ser decisiva al incorporar estas dimensiones.
+:::
+
+
+## Errores frecuentes
+
+Estos son los errores que más se repiten en este capítulo; léalos con calma, porque casi todos nacen antes de empezar a calcular:
+
+1. **Comparar tasas expresadas bajo convenciones diferentes.**  
+   Una tasa efectiva anual del $6\%$ no se puede comparar directamente con una tasa nominal anual del $6\%$ convertible mensualmente, con una fuerza de interés del $6\%$ ni con una tasa nominal de descuento del $6\%$. Primero hay que expresarlas sobre una base común.
+
+2. **Confundir la tasa nominal con la tasa efectiva del subperiodo.**  
+   Si $i^{(m)}$ es una tasa nominal anual convertible $m$ veces, la tasa efectiva aplicada en cada subperiodo es
+
+   $$
+   \frac{i^{(m)}}{m}.
+   $$
+
+   La tasa efectiva anual correspondiente es
+
+   $$
+   \left(1+\frac{i^{(m)}}{m}\right)^m-1.
+   $$
+
+3. **Mezclar unidades de tiempo.**  
+   Una tasa anual no se puede usar tal cual con un plazo en meses o en días: hay que respetar la unidad de tiempo y, cuando corresponda, la convención de conteo de días.
+
+4. **Confundir tasa nominal de interés y tasa nominal de descuento.**  
+   Las cantidades $i^{(m)}$ y $d^{(m)}$ se construyen sobre bases distintas, así que no son intercambiables; lo que las relaciona es
+
+   $$
+   \left(1+\frac{i^{(m)}}{m}\right)
+   \left(1-\frac{d^{(m)}}{m}\right)
+   =1.
+   $$
+
+5. **Confundir tasa efectiva de descuento con descuento bancario simple.**  
+   La tasa efectiva de descuento satisface
+
+   $$
+   d=\frac{i}{1+i},
+   $$
+
+   mientras que una operación con descuento bancario simple usa expresiones de la forma
+
+   $$
+   P=F(1-d_b t).
+   $$
+
+   Son convenciones distintas, y no se deben mezclar.
+
+6. **Interpretar la fuerza de interés como una tasa efectiva.**  
+   Una fuerza constante $\delta$ corresponde a
+
+   $$
+   i=e^\delta-1,
+   $$
+
+   no a $i=\delta$.
+
+7. **Confundir una tasa del intervalo con su equivalente anual.**  
+   Si
+
+   $$
+   a(s,t)=1+i_{[s,t]},
+   $$
+
+   entonces $i_{[s,t]}$ describe el crecimiento de todo el intervalo. Cuando $t-s\neq1$, su tasa efectiva anual equivalente es
+
+   $$
+   i_{\mathrm{eq},[s,t]}
+   =
+   a(s,t)^{1/(t-s)}-1.
+   $$
+
+8. **Confundir TWR, MWRR y DWR.**  
+   El TWR elimina el efecto de los flujos externos; el MWRR es una TIR exacta ponderada por dinero; y en la convención del Exam FM de la SOA, el DWR es una aproximación con interés simple. Están relacionadas, pero no son equivalentes.
+
+9. **Elegir una alternativa por el porcentaje anunciado.**  
+   El porcentaje que parece mayor no siempre produce el mayor valor acumulado. Antes de comparar alternativas hay que estandarizar las tasas.
+
+10. **Confiar en una salida computacional sin identificar el modelo financiero.**  
+    Una función puede ejecutar bien el cálculo y, aun así, haberse usado con una convención equivocada. Antes de interpretar el resultado, identifique la fecha, la tasa, su convención, su periodicidad y la magnitud que está calculando.
+
+Antes de calcular, identifique cuatro elementos: **la fecha de cada valor, la convención de tasa, la unidad de tiempo y la magnitud solicitada —tasa, factor o cantidad monetaria—**. Este control corto evita buena parte de los errores anteriores.
+
+## Caso integrador de cierre: un capital que atraviesa tres regímenes
+
+Hasta aquí hemos trabajado cada convención por separado. Para cerrar el capítulo veamos un caso en el que tres de ellas actúan sobre un mismo capital, una detrás de otra. La pregunta de fondo es la que nos ha acompañado desde el comienzo: qué factor de acumulación produce cada tasa y qué pasa cuando esos factores se encadenan.
+
+::: {.callout-tip title="Enunciado" icon=false}
+La aseguradora donde trabaja Paola dispone hoy de COP 850 000 000, que permanecerán invertidos durante $7.5$ años. En ese horizonte se aplicarán tres regímenes consecutivos de interés:
+
+- **Etapa 1**, los primeros $2.5$ años: tasa nominal anual de interés $i^{(12)}=7.20\%$, convertible mensualmente.
+- **Etapa 2**, los siguientes $3$ años: fuerza de interés constante $\delta=6.80\%$.
+- **Etapa 3**, los últimos $2$ años: tasa nominal anual de descuento $d^{(4)}=6.40\%$, convertible trimestralmente.
+
+Paola debe:
+
+1. determinar el factor de acumulación de cada etapa;
+2. obtener el factor total de acumulación durante los $7.5$ años;
+3. calcular el valor acumulado de los COP 850 millones al final del horizonte;
+4. hallar la tasa efectiva anual constante equivalente a toda la estructura;
+5. determinar cuánto debería invertirse hoy para disponer de COP 1 500 millones al final de los $7.5$ años;
+6. comparar el resultado con una alternativa que reconoce una tasa efectiva anual constante del $7.00\%$.
+:::
+
+Antes de calcular, ubiquemos el problema en el tiempo. El capital es uno solo; lo que cambia, tramo a tramo, es la ley financiera que lo hace crecer.
+
+```{r}
+#| label: fig-linea-tiempo-cierre-capitulo-01
+#| fig-cap: "Línea de tiempo del caso: un mismo capital atraviesa tres regímenes consecutivos."
+#| fig-width: 7
+#| fig-height: 2.3
+#| code-fold: true
+#| code-summary: "Código de la línea de tiempo"
+
+tramos_cierre <- tibble::tibble(
+  inicio = c(0, 2.5, 5.5),
+  fin = c(2.5, 5.5, 7.5),
+  tasa = c("i^{(12)} == '7.20%'", "delta == '6.80%'", "d^{(4)} == '6.40%'"),
+  duracion = c("2.5 años", "3 años", "2 años")
+)
+
+fechas_cierre <- tibble::tibble(
+  t = c(0, 2.5, 5.5, 7.5),
+  capital = c("C[0]", "C[2.5]", "C[5.5]", "C[7.5]")
+)
+
+ggplot2::ggplot(tramos_cierre) +
+  ggplot2::geom_segment(
+    ggplot2::aes(
+      x = inicio, xend = fin, y = 0, yend = 0, colour = factor(inicio)
+    ),
+    linewidth = 3, lineend = "butt"
+  ) +
+  ggplot2::geom_point(
+    data = fechas_cierre,
+    ggplot2::aes(x = t, y = 0),
+    size = 3.2, colour = "#1C2430"
+  ) +
+  ggplot2::geom_text(                                  # tasa de cada tramo
+    ggplot2::aes(x = (inicio + fin) / 2, y = 0.38, label = tasa),
+    parse = TRUE, size = 4.2
+  ) +
+  ggplot2::geom_text(                                  # duración de cada tramo
+    ggplot2::aes(x = (inicio + fin) / 2, y = -0.32, label = duracion),
+    size = 3.4, colour = "#4A5563"
+  ) +
+  ggplot2::geom_text(                                  # capital en cada fecha
+    data = fechas_cierre,
+    ggplot2::aes(x = t, y = -0.78, label = capital),
+    parse = TRUE, size = 3.9
+  ) +
+  ggplot2::scale_colour_manual(
+    values = c("#1F4E79", "#2E6B4F", "#B8860B"),
+    guide = "none"
+  ) +
+  ggplot2::scale_x_continuous(
+    breaks = c(0, 2.5, 5.5, 7.5),
+    labels = c("t = 0", "t = 2.5", "t = 5.5", "t = 7.5")
+  ) +
+  ggplot2::coord_cartesian(ylim = c(-1, 0.65), clip = "off") +
+  ggplot2::labs(x = NULL, y = NULL) +
+  ggplot2::theme_minimal(base_size = 11) +
+  ggplot2::theme(
+    axis.text.y = ggplot2::element_blank(),
+    panel.grid = ggplot2::element_blank()
+  )
+```
+
+### Planteamiento
+
+Se trata de **un único capital** que atraviesa, uno detrás de otro, tres regímenes de acumulación. No hay aportes ni retiros intermedios: lo que sale de una etapa es exactamente lo que entra a la siguiente. Si llamamos $a_1$, $a_2$ y $a_3$ a los factores de cada etapa,
+
+$$
+C_{2.5}=C_0\,a_1,
+\qquad
+C_{5.5}=C_{2.5}\,a_2,
+\qquad
+C_{7.5}=C_{5.5}\,a_3,
+$$
+
+y, por tanto,
+
+$$
+C_{7.5}=C_0\,a_1a_2a_3.
+$$
+
+Es la consistencia temporal que vimos con el factor de acumulación entre dos tiempos, $a(r,t)=a(r,s)a(s,t)$, aplicada dos veces: $a_1=a(0,2.5)$, $a_2=a(2.5,5.5)$ y $a_3=a(5.5,7.5)$.
+
+### Factor de cada etapa
+
+**Primera etapa: tasa nominal de interés convertible mensualmente.** Con $i^{(12)}=0.072$, la tasa efectiva mensual es
+
+$$
+\frac{0.072}{12}=0.006.
+$$
+
+En $2.5$ años hay $12(2.5)=30$ meses, así que
+
+$$
+\begin{aligned}
+a_1
+&=
+\left(1+\frac{0.072}{12}\right)^{30}\\
+&=
+(1.006)^{30}\\
+&\approx
+1.196574.
+\end{aligned}
+$$
+
+**Segunda etapa: fuerza de interés constante.** Con fuerza constante, $a(t)=e^{\delta t}$, y lo único que importa es cuánto dura la etapa, no dónde empieza. Durante tres años,
+
+$$
+\begin{aligned}
+a_2
+&=
+e^{0.068(3)}\\
+&=
+e^{0.204}\\
+&\approx
+1.226298.
+\end{aligned}
+$$
+
+**Tercera etapa: tasa nominal de descuento convertible trimestralmente.** Aquí está el paso delicado. Con $d^{(4)}=0.064$, la tasa efectiva de descuento de cada trimestre es
+
+$$
+\frac{0.064}{4}=0.016.
+$$
+
+Recuerde que la tasa de descuento se mide sobre el valor final: en cada trimestre, una unidad disponible al final equivale a $1-0.016$ unidades al comienzo. El factor de acumulación de un trimestre es, entonces, el inverso,
+
+$$
+\frac{1}{1-0.016},
+$$
+
+y como hay ocho trimestres,
+
+$$
+\begin{aligned}
+a_3
+&=
+\left(\frac{1}{1-0.064/4}\right)^{8}\\
+&=
+(0.984)^{-8}\\
+&\approx
+1.137730.
+\end{aligned}
+$$
+
+::: {.callout-warning title="Advertencia. Una tasa de descuento no es una tasa de interés" icon=false}
+El error más común en esta etapa es tratar el $6.40\%$ como si fuera una tasa nominal de interés y calcular $(1+0.016)^8\approx 1.135402$. Ese factor subestima la acumulación: con él, el capital final sería de unos COP 1 416 133 136.89, casi tres millones menos que el resultado correcto.
+
+Antes de usar una tasa hay que leer su convención; con una tasa de descuento, la base es el valor final y el factor de cada subperiodo es $1/(1-d_m)$, no $1+d_m$.
+:::
+
+### Factor total y valor acumulado
+
+Multiplicando los tres factores,
+
+$$
+\begin{aligned}
+a(7.5)
+&=
+a_1a_2a_3\\
+&=
+(1.006)^{30}\,e^{0.204}\,(0.984)^{-8}\\
+&\approx
+1.669455.
+\end{aligned}
+$$
+
+Leído en palabras: **cada peso invertido al inicio se convierte en aproximadamente $1.669455$ pesos al final de los $7.5$ años.**
+
+Con $C_0=850\,000\,000$,
+
+$$
+\begin{aligned}
+C_{7.5}
+&=
+850\,000\,000\,a(7.5)\\
+&\approx
+1\,419\,036\,721.48.
+\end{aligned}
+$$
+
+En este producto usamos el factor sin redondear; con solo seis decimales el resultado se movería algunas decenas de pesos. En el camino, el capital pasa por COP 1 017 087 571.30 en $t=2.5$ y por COP 1 247 252 610.58 en $t=5.5$.
+
+### Tasa efectiva anual equivalente
+
+Buscamos la tasa constante $i_{\mathrm{eq}}$ que, aplicada durante los $7.5$ años, produce el mismo factor total:
+
+$$
+(1+i_{\mathrm{eq}})^{7.5}
+=
+a(7.5).
+$$
+
+Despejando,
+
+$$
+\begin{aligned}
+i_{\mathrm{eq}}
+&=
+a(7.5)^{1/7.5}-1\\
+&\approx
+0.070722,
+\end{aligned}
+$$
+
+es decir, $i_{\mathrm{eq}}\approx 7.0722\%$.
+
+Ojo con lo que significa este número. No reemplaza los tres regímenes: año a año, la inversión no rinde $7.0722\%$. En la primera etapa la tasa efectiva anual es $i_1=(1.006)^{12}-1\approx 7.4424\%$; en la segunda, $i_2=e^{0.068}-1\approx 7.0365\%$; y en la tercera, $i_3=(0.984)^{-4}-1\approx 6.6644\%$. La tasa $i_{\mathrm{eq}}$ es una **tasa efectiva anual equivalente para el horizonte completo de $7.5$ años**: resume en un solo número el efecto conjunto de las tres etapas, igual que $i_{\mathrm{eq},[s,t]}$ en la sección del factor de acumulación entre dos tiempos. De hecho, $1+i_{\mathrm{eq}}$ es un promedio geométrico de los factores anuales de cada etapa, ponderado por su duración:
+
+$$
+1+i_{\mathrm{eq}}
+=
+(1+i_1)^{2.5/7.5}(1+i_2)^{3/7.5}(1+i_3)^{2/7.5}.
+$$
+
+### Cuánto invertir hoy
+
+Si la compañía necesita disponer de COP 1 500 000 000 al final del horizonte, el capital de hoy se obtiene deshaciendo la acumulación:
+
+$$
+\begin{aligned}
+C_0^{*}
+&=
+\frac{1\,500\,000\,000}{a(7.5)}\\
+&=
+1\,500\,000\,000\,v(7.5)\\
+&\approx
+898\,496\,832.88,
+\end{aligned}
+$$
+
+donde $v(7.5)=1/a(7.5)\approx 0.598998$ es el factor de descuento del horizonte completo. Acumular y descontar son operaciones inversas: el mismo factor que lleva el dinero hacia adelante, invertido, lo trae de vuelta.
+
+### Comparación con una tasa efectiva constante
+
+La alternativa reconoce un $7\%$ efectivo anual durante todo el horizonte:
+
+$$
+\begin{aligned}
+FV_{\mathrm{alt}}
+&=
+850\,000\,000(1.07)^{7.5}\\
+&\approx
+1\,411\,878\,283.76.
+\end{aligned}
+$$
+
+Las dos inversiones arrancan con el mismo capital y se comparan en la misma fecha, así que la comparación es válida. La estructura de tres regímenes produce
+
+$$
+1\,419\,036\,721.48-1\,411\,878\,283.76
+\approx
+7\,158\,437.72
+$$
+
+pesos más. En realidad no hacía falta calcular los dos montos para saber cuál ganaba: bastaba comparar $7.0722\%>7.0000\%$. Con el mismo capital y el mismo horizonte, la tasa efectiva anual equivalente ordena las alternativas.
+
+### Verificación con `tidyactuarial`
+
+En el examen solo hay lápiz, papel y calculadora. Fuera de él, `tidyactuarial` funciona como una calculadora actuarial profesional, y este caso muestra su ventaja principal: cada tasa se queda en su **convención contractual original**. No tenemos que convertir a mano las tres tasas antes de trabajar con ellas; basta con indicarle a la función cómo está expresada cada una.
+
+#### Primer enfoque: factores de acumulación
+
+Guardamos los tres regímenes en una tabla, tal como aparecen en el contrato, con el inicio y el fin de cada tramo. Como `accumulation_factor()` está vectorizada, una sola llamada dentro de `mutate()` calcula los tres factores.
+
+```{r}
+#| label: cierre-factores-tidyactuarial-capitulo-01
+
+capital_aseguradora <- 850000000   # capital invertido hoy (COP)
+horizonte_cierre <- 7.5            # horizonte total, en años
+
+# Los tres regímenes, cada uno en su convención original
+regimenes <- tibble::tribble(
+  ~tramo, ~inicio, ~fin, ~tasa, ~tipo_tasa,         ~frecuencia,
+  1,      0.0,     2.5,  0.072, "nominal_interest", 12,
+  2,      2.5,     5.5,  0.068, "force",            1,
+  3,      5.5,     7.5,  0.064, "nominal_discount", 4
+)
+
+regimenes <- regimenes |>
+  dplyr::mutate(
+    factor = accumulation_factor(
+      s = inicio,           # comienzo del tramo
+      t = fin,              # final del tramo
+      i = tasa,             # tasa tal como aparece en el contrato
+      i_type = tipo_tasa,   # convención de esa tasa
+      m = frecuencia        # frecuencia de conversión (no cuenta en la fuerza)
+    )
+  )
+
+factor_total <- prod(regimenes$factor)                    # a(7.5) = a1 a2 a3
+capital_final_factores <- capital_aseguradora * factor_total
+```
+
+#### Segundo enfoque: composición directa
+
+La segunda forma sigue literalmente el recorrido del dinero. El capital entra a la primera etapa y sale convertido en $C_{2.5}$; entra a la segunda y sale como $C_{5.5}$; termina la tercera como $C_{7.5}$:
+
+$$
+C_0
+\longrightarrow
+C_{2.5}
+\longrightarrow
+C_{5.5}
+\longrightarrow
+C_{7.5}.
+$$
+
+En el código, cada `|>` es una de esas flechas: el resultado de una etapa es el capital de la siguiente. Fíjese en que aquí `t` es la duración de cada etapa, porque en cada llamada el reloj arranca donde terminó la anterior.
+
+```{r}
+#| label: cierre-composicion-tidyactuarial-capitulo-01
+
+capital_final_secuencial <-
+  capital_aseguradora |>
+  future_value(                    # etapa 1: de t = 0 a t = 2.5
+    i = 0.072,
+    i_type = "nominal_interest",
+    m = 12,
+    t = 2.5
+  ) |>
+  future_value(                    # etapa 2: de t = 2.5 a t = 5.5
+    i = 0.068,
+    i_type = "force",
+    t = 3
+  ) |>
+  future_value(                    # etapa 3: de t = 5.5 a t = 7.5
+    i = 0.064,
+    i_type = "nominal_discount",
+    m = 4,
+    t = 2
+  )
+```
+
+#### Descuento en sentido inverso
+
+Para el capital requerido hacemos el recorrido al revés con `present_value()`. Al regresar en el tiempo, los regímenes se recorren en orden inverso: primero los últimos dos años, luego los tres intermedios y por último los primeros $2.5$ años. Esa inversión del orden no es una peculiaridad de R; es exactamente lo que significa caminar la línea de tiempo hacia atrás, desde $t=7.5$ hasta $t=0$. Como los factores se multiplican, el número final sería el mismo en cualquier orden, pero solo este orden deja en cada paso un valor con sentido financiero: primero el valor en $t=5.5$, después en $t=2.5$ y por último en $t=0$.
+
+```{r}
+#| label: cierre-descuento-tidyactuarial-capitulo-01
+
+meta_aseguradora <- 1500000000   # monto requerido en t = 7.5 (COP)
+
+capital_requerido <-
+  meta_aseguradora |>
+  present_value(                   # etapa 3: de t = 7.5 a t = 5.5
+    i = 0.064,
+    i_type = "nominal_discount",
+    m = 4,
+    t = 2
+  ) |>
+  present_value(                   # etapa 2: de t = 5.5 a t = 2.5
+    i = 0.068,
+    i_type = "force",
+    t = 3
+  ) |>
+  present_value(                   # etapa 1: de t = 2.5 a t = 0
+    i = 0.072,
+    i_type = "nominal_interest",
+    m = 12,
+    t = 2.5
+  )
+```
+
+#### Comprobación final
+
+Por último, la tasa equivalente debe reproducir el mismo monto con una sola ley compuesta, y la alternativa del $7\%$ se calcula con la misma función.
+
+```{r}
+#| label: cierre-comprobacion-tidyactuarial-capitulo-01
+
+# Tasa efectiva anual equivalente a toda la estructura
+i_equivalente <- factor_total^(1 / horizonte_cierre) - 1
+
+capital_final_equivalente <- future_value(
+  C = capital_aseguradora,
+  i = i_equivalente,       # una sola tasa efectiva para todo el horizonte
+  t = horizonte_cierre
+)
+
+capital_final_alternativa <- future_value(
+  C = capital_aseguradora,
+  i = 0.07,                # alternativa: 7 % efectivo anual
+  t = horizonte_cierre
+)
+```
+
+```{r}
+#| label: cierre-auditoria-tabla-capitulo-01
+#| echo: false
+#| results: asis
+
+a1_cierre <- (1 + 0.072 / 12)^30
+a2_cierre <- exp(0.068 * 3)
+a3_cierre <- (1 - 0.064 / 4)^(-8)
+factor_cierre <- a1_cierre * a2_cierre * a3_cierre
+
+auditoria_cierre <- tibble::tibble(
+  magnitud = c(
+    "Factor de la etapa 1",
+    "Factor de la etapa 2",
+    "Factor de la etapa 3",
+    "Factor total a(7.5)",
+    "Capital final: factores",
+    "Capital final: composición directa",
+    "Capital final: tasa equivalente",
+    "Tasa efectiva anual equivalente (%)",
+    "Capital requerido hoy",
+    "Capital final: alternativa al 7 %",
+    "Diferencia frente a la alternativa"
+  ),
+  analitico = c(
+    a1_cierre,
+    a2_cierre,
+    a3_cierre,
+    factor_cierre,
+    850000000 * factor_cierre,
+    850000000 * factor_cierre,
+    850000000 * factor_cierre,
+    100 * (factor_cierre^(1 / 7.5) - 1),
+    1500000000 / factor_cierre,
+    850000000 * 1.07^7.5,
+    850000000 * (factor_cierre - 1.07^7.5)
+  ),
+  tidyactuarial = c(
+    regimenes$factor,
+    factor_total,
+    capital_final_factores,
+    capital_final_secuencial,
+    capital_final_equivalente,
+    100 * i_equivalente,
+    capital_requerido,
+    capital_final_alternativa,
+    capital_final_factores - capital_final_alternativa
+  )
+)
+
+tabla_comparacion(
+  auditoria_cierre,
+  titulo = "Auditoría del caso integrador de cierre",
+  digits = c(rep(6, 4), rep(2, 3), 4, rep(2, 3))
+)
+```
+
+Los tres caminos —factores, composición directa y tasa equivalente— llegan al mismo capital final, y el descuento en orden inverso recupera el capital requerido.
+
+### Cierre
+
+La tasa de interés es una forma de describir una ley de acumulación. Una tasa nominal mensual, una fuerza de interés y una tasa nominal de descuento trimestral pueden describir procesos financieros comparables, pero no se deben comparar a partir de sus porcentajes: el $7.20\%$, el $6.80\%$ y el $6.40\%$ de este caso no se pueden poner lado a lado hasta traducirlos en factores. Lo que sí se compara es el factor de acumulación que cada uno produce:
+
+$$
+\boxed{
+\text{convención de tasa}
+\longrightarrow
+\text{factor de acumulación}
+\longrightarrow
+\text{valor financiero}
+}
+$$
+
+Y cuando las leyes de acumulación operan una detrás de otra sobre el mismo capital, sus factores se multiplican:
+
+$$
+\boxed{
+a(0,T)
+=
+a(0,t_1)\,a(t_1,t_2)\cdots a(t_{n-1},T)
+}
+$$
+
+En este caso hubo un solo capital y un solo recorrido. En el próximo capítulo aparecerán varios flujos en fechas distintas, y la pregunta será cómo llevarlos todos a una misma fecha focal; la herramienta seguirá siendo la misma, el factor de acumulación de cada tramo.
+
+## Ejercicios propuestos
+
+Los ejercicios no buscan que repita de memoria las fórmulas del capítulo. En cada caso, antes de calcular, identifique la convención de tasa, la unidad de tiempo, la fecha en la que se valora el dinero y la magnitud que realmente se pide.
+
+### Ejercicios analíticos
+
+#### Dos formas de anunciar una tasa
+
+La aseguradora donde trabaja Paola dispone de COP 40 000 000 para invertir durante un año. Paola recibe dos ofertas:
+
+- un banco ofrece una tasa del $10.40\%$ E.A.;
+- una cooperativa financiera ofrece una tasa del $10.00\%$ N.M.V., es decir, nominal anual de interés convertible mensualmente.
+
+Sin realizar todavía el cálculo del monto:
+
+1. explique por qué las dos tasas no pueden compararse directamente;
+2. determine la tasa efectiva anual equivalente de la segunda oferta;
+3. establezca cuál alternativa produce el mayor monto al cabo de un año;
+4. calcule la diferencia monetaria entre ambas alternativas.
+
+#### Un CDT y un horizonte no entero
+
+Paola invierte COP 28 000 000 de sus ahorros en un CDT que reconoce una tasa del $9.80\%$ E.A. y paga capital e intereses al vencimiento. El dinero permanecerá invertido durante $2.5$ años.
+
+1. Calcule el monto acumulado al final del plazo.
+2. Determine el interés total ganado.
+3. Calcule el factor de acumulación y el factor de descuento correspondientes al intervalo.
+4. Explique por qué no es correcto multiplicar simplemente la tasa anual por $2.5$.
+
+#### Descuento de una factura
+
+Una empresa de Medellín, cliente de la aseguradora, le pide a Paola que revise una operación de *factoring*. La empresa tiene una cuenta por cobrar de COP 120 000 000 que vence dentro de 210 días, y una entidad financiera está dispuesta a anticipar el pago utilizando una tasa de descuento bancario simple del $12.40\%$ anual bajo la convención Actual/360.
+
+1. Determine el valor que recibe hoy la empresa.
+2. Calcule el descuento monetario aplicado por la entidad.
+3. Determine la tasa efectiva obtenida por la entidad financiera durante los 210 días.
+4. Explique por qué la tasa de descuento bancario utilizada en la operación no debe interpretarse como una tasa efectiva de descuento.
+
+#### Un fondo con fuerza de interés variable
+
+El fondo de empleados de la aseguradora, del que Paola es asociada, mantiene una reserva financiera cuya fuerza de interés se modela, durante los próximos seis años, mediante
+
+$$
+\delta(t)=0.045+0.0015t,
+\qquad 0\le t\le 6.
+$$
+
+Al finalizar el primer año, el fondo dispone de COP 85 000 000.
+
+1. Determine el factor de acumulación entre $t=1$ y $t=5$.
+2. Calcule el valor de la reserva en $t=5$ si no se realizan depósitos ni retiros durante ese intervalo.
+3. Obtenga la tasa efectiva anual equivalente para el periodo $[1,5]$.
+4. Compare esa tasa con $\delta(1)$ y $\delta(5)$ y explique por qué ninguna de estas dos fuerzas instantáneas coincide, en general, con la tasa efectiva anual equivalente del intervalo.
+
+#### Tres ofertas, tres leyes
+
+Paola debe invertir USD 10 000 durante tres años y recibe tres ofertas:
+
+- **Opción A:** interés simple del $9\%$ anual.
+- **Opción B:** tasa nominal anual de interés del $8.75\%$, convertible trimestralmente.
+- **Opción C:** fuerza de interés variable $\delta(t)=0.08+0.002t$.
+
+1. Identifique la ley financiera de cada oferta.
+2. Calcule el monto de cada opción al final del tercer año.
+3. Determine cuál produce el mayor monto. ¿Hacía falta convertir las tres tasas a una tasa efectiva anual para responder?
+4. Verifique los tres montos con `accumulation_factor()`, pasando cada ley en su forma original: `a`, `i` con `i_type`, o `delta`.
+
+#### Desafío tipo FM: dos etapas de acumulación
+
+La tesorería de una empresa exportadora colombiana invierte COP 50 000 000 durante cuatro años. Durante los primeros 18 meses, el capital se acumula a una tasa nominal anual de interés del $9.60\%$, convertible trimestralmente. A partir de ese momento y hasta completar los cuatro años, el saldo se acumula con una fuerza de interés constante de
+
+$$
+\delta=0.082.
+$$
+
+1. Dibuje la línea de tiempo e identifique los dos intervalos de acumulación.
+2. Calcule el monto disponible al final del cuarto año.
+3. Determine la tasa efectiva anual constante que produciría exactamente el mismo monto durante los cuatro años.
+4. Resuelva primero el problema de forma analítica. Después audite el resultado con `standardize_interest()`, `accumulation_factor()` y `future_value()`.
+5. Explique qué parte del problema depende de reconocer correctamente la convención de tasa y qué parte depende únicamente de la multiplicación de factores de acumulación.
+
+### Ejercicios con R: `tidyactuarial` y el tidyverse
+
+Estos ejercicios se resuelven en R. La idea es usar `tidyactuarial` para el cálculo financiero y el tidyverse —`dplyr`, `tidyr`, `purrr` y `ggplot2`— para organizar, comparar y graficar los resultados. Antes de escribir código, plantee la solución analítica: el código debe confirmarla, no reemplazarla.
+
+```r
+library(tidyactuarial)
+library(tidyverse)
+```
+
+#### El comparador de tasas de Paola
+
+Paola quiere dejar COP 15 000 000 durante tres años y reúne estas seis cotizaciones:
+
+| Entidad | Tasa anunciada | Convención |
+|---|---:|---|
+| Banco Cordillera | $10.20\%$ | E.A. |
+| Banco Altiplano | $9.80\%$ | N.M.V. |
+| Financiera Cumbre | $9.90\%$ | N.T.V. |
+| Cooperativa Sabana | $9.50\%$ | N.T.A. |
+| Fondo Páramo | $9.70\%$ | fuerza de interés |
+| Banco Llanura | $9.95\%$ | N.S.V. |
+
+1. Construya una `tibble` con las columnas `entidad`, `tipo_tasa`, `tasa_anunciada` y `frecuencia`, usando los nombres de convención de `tidyactuarial`: `"effective"`, `"nominal_interest"`, `"nominal_discount"` y `"force"`.
+2. Con `mutate()` y una sola llamada a `standardize_interest()`, agregue la tasa efectiva anual de cada oferta.
+3. Calcule el monto al cabo de tres años de dos maneras: con `future_value()` a partir de la tasa anunciada, pasando `i_type` y `m`, y con `future_value()` a partir de la tasa ya estandarizada. Verifique que la diferencia absoluta entre ambas columnas es prácticamente cero.
+4. Ordene las ofertas con `arrange()` y grafique las tasas efectivas con `ggplot2`. ¿La entidad con el porcentaje anunciado más alto es la que más rinde?
+
+Puede arrancar así:
+
+```r
+ofertas <- tibble(
+  entidad = c(
+    "Banco Cordillera", "Banco Altiplano", "Financiera Cumbre",
+    "Cooperativa Sabana", "Fondo Páramo", "Banco Llanura"
+  ),
+  tipo_tasa = c(
+    "effective", "nominal_interest", "nominal_interest",
+    "nominal_discount", "force", "nominal_interest"
+  ),
+  tasa_anunciada = c(0.1020, 0.0980, 0.0990, 0.0950, 0.0970, 0.0995),
+  frecuencia = c(1, 12, 4, 4, 1, 2)
+)
+
+ofertas |>
+  mutate(
+    tasa_ea = standardize_interest(
+      i_type = tipo_tasa,       # convención de cada oferta
+      i = tasa_anunciada,       # porcentaje anunciado
+      m = frecuencia            # se ignora en efectiva y fuerza
+    )
+  )
+# Continúe: montos a tres años, ordenamiento y gráfica
+```
+
+#### Una tabla de equivalencias para varias frecuencias
+
+Tome una tasa del $10\%$ E.A.
+
+1. Con `purrr::map()` aplique `interest_equivalents()` para $m\in\{1,2,4,12,52,365\}$ y apile los resultados en una sola tabla con `list_rbind()`.
+2. Quédese con las familias `"nominal_interest"` y `"nominal_discount"` y use `pivot_wider()` para tener una fila por frecuencia, con $i^{(m)}$ y $d^{(m)}$ en columnas. Recuerde que en la salida del paquete $i^{(m)}$ aparece con la notación $j^{(m)}$.
+3. Grafique $i^{(m)}$ y $d^{(m)}$ contra $m$, con el eje horizontal en escala logarítmica, y agregue con `geom_hline()` una línea horizontal en $\delta=\ln(1.10)$.
+4. Compruebe con `summarise()` que $d^{(m)}<\delta<i^{(m)}$ para todo $m\ge 2$. ¿A cuántos puntos básicos de $\delta$ está $i^{(365)}$?
+
+#### La meta de Paola para la cuota inicial
+
+Paola empieza a ahorrar para la cuota inicial de un apartamento —volveremos a su plan en el capítulo siguiente— y se pone una primera meta de COP 60 000 000. Todavía no ha decidido el plazo ni el producto.
+
+1. Con `expand_grid()` construya todos los escenarios con plazos $t=1,2,\dots,8$ años y tasas del $7\%$, $9\%$ y $11\%$ E.A.
+2. Con una sola llamada vectorizada a `present_value()`, calcule cuánto debería depositar hoy en cada escenario.
+3. Grafique el depósito requerido contra el plazo, con una línea por tasa.
+4. Para un plazo de cinco años, ¿cuánto más tendría que depositar hoy si la tasa fuera del $7\%$ en lugar del $11\%$? ¿Por qué la brecha entre las curvas crece con el plazo?
+
+#### Interés simple contra compuesto con `accumulation_factor()`
+
+Tome $i=12\%$ y la malla de tiempos `t = seq(0, 5, by = 0.25)`.
+
+1. Calcule el factor de acumulación de interés simple con `accumulation_factor(s = 0, t = t, a = function(t) 1 + 0.12 * t)` y el de interés compuesto con `accumulation_factor(s = 0, t = t, i = 0.12)`.
+2. Lleve los dos factores a formato largo con `pivot_longer()` y grafíquelos en una sola figura.
+3. ¿En qué tiempos coinciden las dos leyes? ¿Cuál acumula más antes de un año y cuál después? Justifique la respuesta con la desigualdad de Bernoulli: $(1+i)^t\le 1+it$ si $0\le t\le 1$, y $(1+i)^t\ge 1+it$ si $t\ge 1$.
+
+#### Auditoría numérica de una fuerza periódica
+
+Considere la fuerza de interés
+
+$$
+\delta(t)=0.06+0.02\sin\left(\frac{\pi t}{2}\right).
+$$
+
+1. Muestre que
+   $$
+   \int_0^t\delta(u)\,du
+   =
+   0.06t+\frac{0.04}{\pi}\left[1-\cos\left(\frac{\pi t}{2}\right)\right].
+   $$
+2. Para `t = seq(0.5, 6, by = 0.5)`, calcule $a(0,t)$ con `accumulation_factor(delta = ...)` y con la fórmula cerrada. Guarde los dos resultados en una `tibble`, agregue la diferencia absoluta con `mutate()` y obtenga el error máximo con `summarise()`.
+3. Calcule los factores anuales $a(s,s+1)$ para $s=0,1,2,3,4$ con una sola llamada, usando `s = 0:4` y `t = 1:5`. ¿Son todos iguales? Explique por qué, con una fuerza variable, importa dónde está ubicado el intervalo y no solo cuánto dura.
+
+#### TWR, MWRR y DWR del fondo voluntario de Paola
+
+Paola abrió un fondo voluntario de pensiones con COP 10 000 000 y siguió aportando cada trimestre. Estos fueron los saldos del primer año:
+
+| Tiempo (años) | Saldo antes del aporte | Aporte | Saldo después del aporte |
+|---:|---:|---:|---:|
+| 0.00 | — | 10 000 000 | 10 000 000 |
+| 0.25 | 10 300 000 | 2 000 000 | 12 300 000 |
+| 0.50 | 12 050 000 | 2 000 000 | 14 050 000 |
+| 0.75 | 14 600 000 | 2 000 000 | 16 600 000 |
+| 1.00 | 17 100 000 | — | — |
+
+1. Con `lag()` calcule el rendimiento de cada trimestre y obtenga el TWR del año con `prod()`.
+2. Calcule el MWRR de dos formas: con `uniroot()` sobre una función que use `future_value()` para acumular los cuatro aportes hasta $t=1$ y los compare con el saldo final; y con `irr_flow()`, tratando los aportes como flujos negativos y el saldo final como un flujo positivo.
+3. Calcule el DWR bajo la convención del Exam FM.
+4. Reúna las tres medidas en una `tibble` y explique por qué, a diferencia del ejemplo de la sección de rendimientos, aquí el MWRR resulta mayor que el TWR.
+
+Para el MWRR con `uniroot()`, una posible estructura es:
+
+```r
+aportes <- tibble(
+  t = c(0, 0.25, 0.50, 0.75),
+  aporte = c(10000000, 2000000, 2000000, 2000000)
+)
+
+ecuacion_mwrr <- function(i) {
+  sum(future_value(C = aportes$aporte, i = i, t = 1 - aportes$t)) - 17100000
+}
+
+uniroot(ecuacion_mwrr, interval = c(0, 1))$root
+```
+
+::: {.callout-note title="Práctica adicional" icon=false}
+Estos ejercicios están diseñados para revisar los conceptos centrales del capítulo y su implementación computacional. Para una práctica más extensa de teoría del interés y preparación para Exam FM pueden consultarse, entre otras referencias, Marcel B. Finan, *A Basic Course in the Theory of Interest and Derivatives Markets: A Preparation for the Actuarial Exam FM/2*; Stephen G. Kellison, *The Theory of Interest*; y Samuel A. Broverman, *Mathematics of Investment and Credit*.[^practica-adicional-interes]
+:::
+
+[^practica-adicional-interes]: Estas referencias contienen colecciones amplias de problemas de teoría del interés y matemática financiera. El propósito de los ejercicios de este libro es complementar esa práctica con contextos cercanos al entorno financiero latinoamericano y con auditorías reproducibles mediante `tidyactuarial`.
+
+## Síntesis del capítulo
+
+El valor del dinero en el tiempo es la base financiera de buena parte de la matemática actuarial. En este capítulo construimos ese lenguaje a partir de una idea central: **un capital solo puede compararse con otro cuando ambos se expresan en una fecha común y bajo una ley financiera claramente definida**.
+
+La función de acumulación nos permitió reunir en una sola estructura el interés simple, el interés compuesto, las tasas efectivas y nominales, las tasas de descuento y la fuerza de interés. Con los factores $a(s,t)$ y $v(s,t)$ vimos además que una operación financiera no siempre depende solo de la longitud del intervalo: cuando la ley de acumulación varía con el tiempo, también importa dónde está ubicada.
+
+Esto pesa mucho en la práctica. Una tasa efectiva anual, una nominal convertible mensualmente, una fuerza de interés y una tasa de descuento bancario pueden tener porcentajes parecidos y, sin embargo, representar operaciones distintas. Para compararlas hay que identificar primero la convención y, si es necesario, expresarlas sobre una base común. En Colombia esto se ve a diario: un CDT en E.A., un crédito en N.M.V., una tasa anticipada en N.T.A. o un crédito atado al IBR hablan de la misma ley financiera con acentos distintos.
+
+También vimos que los aportes y retiros obligan a precisar qué entendemos por rendimiento. El TWR mide el desempeño de la inversión eliminando el efecto de los flujos externos; el MWRR incorpora su monto y su momento; y el DWR del Exam FM es una aproximación con interés simple. Es un buen ejemplo de una regla que repetiremos a lo largo del libro: **antes de calcular, hay que identificar exactamente qué magnitud financiera se está midiendo**.
+
+Las herramientas de `tidyactuarial` que usamos —`future_value()`, `present_value()`, `standardize_interest()`, `interest_equivalents()`, `accumulation_factor()` y `discount_factor()`— sirven para verificar y sistematizar: reproducen computacionalmente lo que desarrollamos de forma analítica. El orden no cambia: primero se identifica la ley financiera y se plantea el problema; después se usa el software para calcular, comparar o auditar el resultado.
+
+### La tasa de descuento en la práctica actuarial
+
+En una valoración actuarial, la tasa de descuento no siempre la escoge libremente el analista: puede venir dada por el contrato, por metodologías institucionales o por el marco técnico, contable o regulatorio aplicable.
+
+Por eso, conocer las equivalencias entre tasas no significa que se puedan sustituir unas por otras a voluntad. La equivalencia matemática nos permite expresar una misma ley financiera con distintas convenciones; escoger la base de descuento de una valoración concreta requiere, además, una justificación actuarial.
+
+### Anticipación: el interés técnico en seguros de vida
+
+La misma lógica reaparecerá cuando estudiemos contingencias de vida. Considere, por ejemplo, una prima neta nivelada $P$ para un seguro de vida entera:
+
+$$
+P\ddot{a}_x=A_x.
+$$
+
+Aquí $\ddot{a}_x$ representa el valor actuarial presente de las primas y $A_x$ el valor actuarial presente del beneficio por muerte. Ambos dependen de la ley financiera utilizada para descontar pagos futuros, además de las probabilidades de supervivencia y muerte.
+
+Así, cuando incorporemos la mortalidad, el componente financiero de este capítulo no desaparece; lo que cambia es la naturaleza de los flujos, que dejan de ser ciertos y pasan a depender también de eventos contingentes.
+
+## Transición al capítulo siguiente
+
+Pero antes de llegar ahí necesitamos una herramienta más. Hasta ahora hemos trasladado sobre todo capitales individuales entre fechas. En el siguiente capítulo estudiaremos las **ecuaciones de valor**, que nos permiten reunir varios flujos en una fecha focal y plantear relaciones de equivalencia entre obligaciones financieras.
+

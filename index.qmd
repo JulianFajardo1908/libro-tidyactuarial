@@ -1,0 +1,62 @@
+# Prefacio {.unnumbered}
+
+Este libro enseña matemática actuarial con R. Cada tema se desarrolla primero con la matemática —definiciones, demostraciones y ejemplos resueltos a mano— y después se verifica con `tidyactuarial`, un paquete de R pensado para trabajar con notación actuarial y con el estilo del tidyverse.
+
+Está escrito para estudiantes de actuaría, estadística y matemáticas, y para quienes se preparan para el examen FM de la Society of Actuaries. Los ejemplos usan, en su mayoría, pesos colombianos y productos financieros del mercado colombiano, aunque las ideas valen para cualquier mercado.
+
+::: {.callout-note title="Un libro en construcción" icon=false}
+Los capítulos se publican a medida que están listos. Por ahora están disponibles:
+
+1. Tasas de interés y valor del dinero.
+2. Ecuaciones de valor.
+
+Después vendrán anualidades ciertas, amortización de préstamos, bonos, duración y convexidad, y curvas spot y forward. Más adelante llegará el bloque de contingencias de vida.
+
+Si encuentra un error o tiene una sugerencia, puede reportarlo con el enlace «Informar sobre problema» que aparece junto al índice de cada página.
+:::
+
+## Cómo leer el libro {.unnumbered}
+
+En los ejemplos aplicados nos acompaña **Paola**, una actuaria en formación que vive en Bogotá, trabaja como analista en una aseguradora y se prepara para el examen FM. Sus decisiones son el tipo de preguntas que el libro enseña a responder.
+
+El color de cada caja indica su papel:
+
+::: {.callout-note title="Definiciones y notas" icon=false}
+Definiciones, notas técnicas y la documentación de las funciones de `tidyactuarial`.
+:::
+
+::: {.callout-tip title="Ejemplos" icon=false}
+Ejemplos resueltos paso a paso.
+:::
+
+::: {.callout-important title="Resultados y convenciones" icon=false}
+Resultados que se usarán más adelante y convenciones del libro.
+:::
+
+::: {.callout-warning title="Advertencias" icon=false}
+Errores frecuentes y confusiones que conviene evitar.
+:::
+
+Al final de muchos ejemplos aparece una tabla de **auditoría**: pone lado a lado el resultado analítico y el que calcula `tidyactuarial`. La diferencia esperada es cero, salvo redondeo numérico.
+
+## Requisitos {.unnumbered}
+
+Para reproducir el código necesita R 4.1 o posterior y `tidyactuarial` 0.2.0 o posterior:
+
+```r
+install.packages(
+  "tidyactuarial",
+  repos = "https://cloud.r-project.org"
+)
+```
+
+Los capítulos usan además `tidyverse`, `knitr` y `lubridate`. Para instalar estas dependencias puede ejecutar:
+
+```r
+install.packages(c("tidyverse", "knitr", "lubridate"))
+```
+
+## Código y documentación {.unnumbered}
+
+El texto desarrolla los razonamientos y resultados matemáticos; el paquete permite reproducir y auditar los ejemplos. La versión estable está disponible en [CRAN](https://cran.r-project.org/package=tidyactuarial), mientras que la [documentación de tidyactuarial](https://julianfajardo1908.github.io/tidyactuarial/) reúne las funciones, sus argumentos y las viñetas de uso. El [código fuente del paquete](https://github.com/JulianFajardo1908/tidyactuarial) se mantiene en un repositorio independiente.
+

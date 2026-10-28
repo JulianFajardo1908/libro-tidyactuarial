@@ -1,0 +1,40 @@
+project:
+  type: book
+  output-dir: _book
+  execute-dir: project
+
+lang: es
+
+book:
+  title: "Matemática Actuarial con R y tidyactuarial"
+  subtitle: "Desarrollos matemáticos y cálculo reproducible"
+  author: "Julián Mauricio Fajardo"
+  repo-url: https://github.com/JulianFajardo1908/libro-tidyactuarial
+  repo-actions: [issue, source]
+  site-url: https://julianfajardo1908.github.io/libro-tidyactuarial/
+  chapters:
+    - index.qmd
+    - 01-tasas-interes.qmd
+  page-footer:
+    left: "Julián Mauricio Fajardo"
+    right:
+      - text: "Paquete tidyactuarial"
+        href: https://julianfajardo1908.github.io/tidyactuarial/
+      - text: "CRAN"
+        href: https://cran.r-project.org/package=tidyactuarial
+
+format:
+  html:
+    theme: [cosmo, estilo-libro.scss]
+    toc: true
+    toc-depth: 2
+    number-sections: true
+    html-math-method: mathjax
+    code-overflow: wrap
+    code-copy: true
+
+execute:
+  echo: true
+  warning: false
+  message: false
+  error: false
